@@ -3,7 +3,7 @@
 This document serves as a "Brain" for Antigravity or any developer to understand the current state of the IPL 2026 Fantasy application and continue development.
 
 ## 🚀 Project Overview
-A full-stack Fantasy Cricket application for the IPL 2026 season. Users build a squad of 16 players and then select a 12-player lineup (11+1) for each individual match to earn points.
+A full-stack Fantasy Cricket application for the IPL 2026 season. Users build a balanced squad of 12 players and assign weekly roles (Captain, Vice-Captain, Impact). to earn points.
 
 ## 🛠️ Tech Stack
 - **Frontend**: React (Vite) + Vanilla CSS.
@@ -25,8 +25,8 @@ A full-stack Fantasy Cricket application for the IPL 2026 season. Users build a 
    - **Lineup**: Points only count for the 12 selected players (XI + Impact) for that specific match.
 
 ## 📋 Features implemented
-- [x] **Squad Building**: 16 players, ₹120Cr budget, role constraints (WK, BAT, AR, BOWL).
-- [x] **Match Lineups**: Users pick 12 players from their 16 for each match.
+- [x] **Squad Building**: 16 players, ₹120Cr budget, strict role constraints (3-6 each category).
+- [x] **12-Player Squad**: Strictly balanced (3-6 per category, max 4 overseas, min 1 wk).
 - [x] **Deadline Enforcement**: Lineup changes lock at 7:30 PM IST (14:00 UTC) on match day.
 - [x] **Admin Panel**: Matches can be created, marked DONE, and stats entered for players.
 - [x] **Leaderboard**: Global and Group-based rankings.
