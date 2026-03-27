@@ -1,0 +1,61 @@
+const BASE = '';
+
+async function request(url, options = {}) {
+  const res = await fetch(BASE + url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+export const api = {
+  signup: (username, password, admin_password = '') =>
+    request('/api/signup', { method: 'POST', body: JSON.stringify({ username, password, admin_password }) }),
+  login: (username, password, admin_password = '') =>
+    request('/api/login', { method: 'POST', body: JSON.stringify({ username, password, admin_password }) }),
+  getPlayers: () => request('/api/players'),
+  updatePlayer: (id, data) =>
+    request(`/api/players/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePlayer: (id) =>
+    request(`/api/players/${id}`, { method: 'DELETE' }),
+  saveTeam: (username, player_ids) =>
+    request('/api/team', { method: 'POST', body: JSON.stringify({ username, player_ids }) }),
+  getTeam: (username) => request(`/api/team/${username}`),
+  getUser: (username) => request(`/api/user/${username}`),
+  createGroup: (username, name) =>
+    request('/api/group', { method: 'POST', body: JSON.stringify({ username, name }) }),
+  joinGroup: (username, code) =>
+    request('/api/group/join', { method: 'POST', body: JSON.stringify({ username, code }) }),
+  getLeaderboard: (code) => request(`/api/group/${code}/leaderboard`),
+  getGroups: () => request('/api/groups'),
+  getAllGroups: () => request('/api/groups/all'),
+  kickUser: (code, username) =>
+    request(`/api/groups/${code}/kick`, { method: 'POST', body: JSON.stringify({ username }) }),
+  getSettings: () => request('/api/settings'),
+  updateSettings: (allow_team_edit) =>
+    request('/api/settings', { method: 'POST', body: JSON.stringify({ allow_team_edit }) }),
+  getMatches: () => request('/api/admin/matches'),
+  getPublicMatches: () => request('/api/matches'),
+  getPublicMatchStats: (id) => request(`/api/match/${id}/stats`),
+  createMatch: (team1, team2, date, description) =>
+    request('/api/admin/match', { method: 'POST', body: JSON.stringify({ team1, team2, date, description }) }),
+  getMatchPlayers: (matchId) => request(`/api/admin/match/${matchId}/players`),
+  updateStats: (match_id, stats) =>
+    request('/api/admin/stats', { method: 'POST', body: JSON.stringify({ match_id, stats }) }),
+  resetWeekly: () => request('/api/admin/reset-weekly', { method: 'POST' }),
+  recalculate: () => request('/api/admin/recalculate', { method: 'POST' }),
+  getAdminUsers: () => request('/api/admin/users'),
+  updateUser: (username, data) =>
+    request(`/api/admin/users/${username}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (username) =>
+    request(`/api/admin/users/${username}`, { method: 'DELETE' }),
+  deleteMatch: (id) =>
+    request(`/api/admin/match/${id}`, { method: 'DELETE' }),
+  updateMatchStatus: (id, status) => request(`/api/admin/match/${id}/status`, { method: "PUT", body: JSON.stringify({status}) }),
+};
+
+// Additional method for deleting groups
+api.deleteGroup = (code) =>
+  request(`/api/groups/${code}`, { method: 'DELETE' });

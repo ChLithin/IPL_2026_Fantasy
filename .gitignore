@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.Python
+env/
+venv/
+server/backend.log
+server/*.db
+*.db
+server/__pycache__/
+
+# Node
+node_modules/
+client/node_modules/
+dist/
+client/dist/
+
+# OS
+.DS_Store
+
+# Temporary scripts
+fix_all.py
+fix_dashboard.py
+patch_login.py
+patch_login_backend.py
