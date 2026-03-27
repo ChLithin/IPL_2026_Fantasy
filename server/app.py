@@ -129,11 +129,11 @@ def save_team():
     for p in players:
         team_counts[p['team_abbr']] = team_counts.get(p['team_abbr'], 0) + 1
     errors = []
-    if len(players) > 16:
+    if len(players) > 12:
         errors.append("Max 16 players")
     if total_price > 100:
         errors.append(f"Budget exceeded: {total_price} Cr")
-    if overseas_count > 5:
+    if overseas_count > 4:
         errors.append(f"Max 5 overseas, got {overseas_count}")
     for t, c in team_counts.items():
         if c > 3:
@@ -248,7 +248,7 @@ def get_user(username):
         if group:
             group_info = dict(group)
     conn.close()
-    return jsonify(username=user['username'], group_id=user['group_id'], total_points=user['total_points'], weekly_points=user['weekly_points'], is_admin=bool(user['is_admin']), team=[dict(r) for r in team_rows], group=group_info)
+    return jsonify(username=user['username'], group_id=user['group_id'], total_points=user['total_points'], weekly_points=user['weekly_points'], is_admin=bool(user['is_admin']), captain_id=user['captain_id'], vc_id=user['vc_id'], impact_id=user['impact_id'], roles_locked=bool(user['roles_locked']), team=[dict(r) for r in team_rows], group=group_info)
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -351,7 +351,7 @@ def update_stats():
     return jsonify(ok=True)
 
 def _recalculate_user_points(conn):
-    users = conn.execute('SELECT username FROM users').fetchall()
+    users = conn.execute('SELECT username, captain_id, vc_id, impact_id FROM users').fetchall()
         # Get list of all match stats
     all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
     stats_dict = {} # (pid, mid) -> points
