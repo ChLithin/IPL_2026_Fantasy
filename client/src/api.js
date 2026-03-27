@@ -1,13 +1,20 @@
 const BASE = 'https://lithinsaikumar.pythonanywhere.com';
 
 async function request(url, options = {}) {
+  console.log("Requesting: " + BASE + url);
   const res = await fetch(BASE + url, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
+  }).catch(err => {
+    console.error("Fetch Exception:", err);
+    throw new Error("Network error or CORS issue. Check console.");
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Server error (' + res.status + ')');
+  }
+  return await res.json();
 }
 
 export const api = {
