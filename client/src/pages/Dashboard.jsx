@@ -166,7 +166,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
           
           <div className="flex gap-3 mb-4 overflow-x-auto overflow-y-hidden" style={{paddingBottom: 4, scrollbarWidth: 'none'}}>
             {prevMatch && (
-              <div className="card text-center" style={{flex:'0 0 160px', padding:'12px 8px', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)', cursor:'pointer', transition:'all 0.2s', zIndex:10}} onClick={() => openScorecard(prevMatch)} onMouseOver={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'} onMouseOut={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}>
+              <div className="card text-center" style={{flex:'0 0 160px', padding:'12px 8px', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)', cursor:'pointer', transition:'all 0.2s', zIndex:10}} onClick={() => onSelectMatch(prevMatch)} onMouseOver={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'} onMouseOut={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}>
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest" style={{fontSize:9}}>Previous</div>
                 <div style={{fontWeight:900, fontSize:15, marginBottom:4}}>{prevMatch.team1} <span className="text-muted text-xs mx-1">v</span> {prevMatch.team2}</div>
                 <span className="badge badge-ovs" style={{fontSize:9, background:'rgba(255,255,255,0.1)'}}>DONE - view stats ↗</span>

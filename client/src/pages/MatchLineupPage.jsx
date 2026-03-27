@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api, BASE } from '../api';
 
+const isLocked = match.status === 'done';
 const ROLE_EMOJI = { BAT: '🏏', BOWL: '⚡', AR: '🌟', WK: '🥊' };
 
 export default function MatchLineupPage({ user, match, players, teamMeta, onBack }) {
@@ -12,6 +13,7 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState('');
+    const [matchStats, setMatchStats] = useState([]);
 
     // Filter user's base squad from all players
     const baseSquad = players?.filter(p => user.team?.includes(p.id)) || [];
@@ -29,6 +31,10 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
             } catch (e) {
                 console.error(e);
             }
+                            if (match.status === 'done') {
+                    const stats = await api.getPublicMatchStats(match.id);
+                    setMatchStats(stats);
+                }
             setLoading(false);
         }
         load();
@@ -130,18 +136,41 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
                                     <div style={{fontWeight:700, fontSize:13}}>{p.name} {p.overseas ? '✈️' : ''}</div>
                                     <div className="text-xs" style={{color:tc}}>{p.team_abbr} · {p.role}</div>
                                 </div>
+                                {isLocked && (inXI || isImpact) && (
+                                    <div style={{textAlign:'right', marginRight:12}}>
+                                        <div style={{fontWeight:900, color:'#fbbf24', fontSize:14}}>
+                                            {(() => {
+                                                const s = matchStats.find(s => s.player_id === p.id);
+                                                const raw = s ? s.points : 0;
+                                                let mul = 1.0;
+                                                if (p.id === captainId) mul = 2.0;
+                                                else if (p.id === vcId) mul = 1.5;
+                                                return (raw * mul).toFixed(0);
+                                            })()}
+                                        </div>
+                                        <div className="text-xs text-muted" style={{fontSize:9}}>
+                                            {(() => {
+                                              const s = matchStats.find(s => s.player_id === p.id);
+                                              const raw = s ? s.points : 0;
+                                              if (p.id === captainId) return `${raw} x 2`;
+                                              if (p.id === vcId) return `${raw} x 1.5`;
+                                              return '—';
+                                            })()}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="flex gap-1">
                                     <button 
                                         onClick={() => toggleXI(p.id)}
                                         className={`btn btn-xs ${inXI ? 'btn-primary' : 'btn-secondary'}`}
-                                        disabled={!inXI && selectedIds.length >= 11}
+                                        disabled={isLocked || (!inXI && selectedIds.length >= 11)}
                                     >
                                         {inXI ? 'XI ✓' : 'Add to XI'}
                                     </button>
                                     <button 
                                         onClick={() => setImpact(p.id)}
-                                        className={`btn btn-xs ${isImpact ? 'btn-primary' : 'btn-secondary'}`}
+                                        className={`btn btn-xs ${isImpact ? 'btn-primary' : 'btn-secondary'}`} disabled={isLocked}
                                         style={isImpact ? {background:'#fbbf24', color:'#000'} : {}}
                                     >
                                         {isImpact ? 'Impact ✓' : 'Impact?'}
@@ -154,7 +183,7 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
                                             onClick={() => setCaptainId(isC ? null : p.id)}
                                             style={{
                                                 width:24, height:24, borderRadius:12, fontSize:10, fontWeight:900,
-                                                border:'1px solid #fbbf24', cursor:'pointer',
+                                                border:'1px solid #fbbf24', cursor: isLocked ? 'default' : 'pointer',
                                                 background: isC ? '#fbbf24' : 'transparent',
                                                 color: isC ? '#000' : '#fbbf24'
                                             }}
@@ -163,7 +192,7 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
                                             onClick={() => setVcId(isVC ? null : p.id)}
                                             style={{
                                                 width:24, height:24, borderRadius:12, fontSize:10, fontWeight:900,
-                                                border:'1px solid #818cf8', cursor:'pointer',
+                                                border:'1px solid #818cf8', cursor: isLocked ? 'default' : 'pointer',
                                                 background: isVC ? '#818cf8' : 'transparent',
                                                 color: isVC ? '#000' : '#818cf8'
                                             }}
@@ -177,7 +206,7 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
 
                 {err && <div className="alert alert-error mt-3">{err}</div>}
                 
-                <button 
+                {!isLocked && <button 
                     className="btn btn-primary mt-4" 
                     style={{width:'100%', justifyContent:'center'}}
                     onClick={handleSave}
@@ -185,6 +214,25 @@ export default function MatchLineupPage({ user, match, players, teamMeta, onBack
                 >
                     {saving ? 'Saving Lineup...' : 'Confirm Match Lineup 🚀'}
                 </button>
+                            {isLocked && (
+                    <div className="card mt-4 text-center" style={{background:'rgba(251,191,36,0.1)', borderColor:'rgba(251,191,36,0.3)'}}>
+                        <div className="text-muted text-xs uppercase mb-1">Total Earned in this Match</div>
+                        <div style={{fontSize:32, fontWeight:900, color:'#fbbf24'}}>
+                            {(() => {
+                                let total = 0;
+                                const active12 = [...selectedIds, impactId].filter(id => id);
+                                active12.forEach(id => {
+                                    const s = matchStats.find(s => s.player_id === id);
+                                    let mul = 1.0;
+                                    if (id === captainId) mul = 2.0;
+                                    else if (id === vcId) mul = 1.5;
+                                    total += (s ? s.points : 0) * mul;
+                                });
+                                return total.toFixed(0);
+                            })()}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
