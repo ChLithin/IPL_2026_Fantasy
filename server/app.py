@@ -7,6 +7,20 @@ import uuid
 from db import get_conn, init_db, calc_points
 
 app = Flask(__name__)
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if hasattr(e, 'code'):
+        return jsonify(error=str(e)), e.code
+    # Non-HTTP exceptions
+    trace = traceback.format_exc()
+    print("--- SERVER ERROR TRACEBACK ---")
+    print(trace)
+    return jsonify(error="Internal Server Error", detail=str(e)), 500
+
 CORS(app)
 
 ADMIN_PASSWORD = "ipl2026admin"
