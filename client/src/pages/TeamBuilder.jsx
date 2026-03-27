@@ -22,7 +22,7 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
 
 export default function TeamBuilder({ user, players, onSave, teamMeta }) {
     const initialTeamIds = user.team ? user.team.map(p => typeof p === 'object' ? p.id : p) : [];
-  const initialTeam = initialTeamIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+  const initialTeam = initialTeamIds.map(id => (Array.isArray(players) ? players : []).find(p => p.id === id)).filter(Boolean);
   const isEditMode = initialTeam.length === 16;
   const [selected, setSelected] = useState(initialTeam);
   const [activeTeam, setActiveTeam] = useState('CSK');
@@ -32,7 +32,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
   const [showReview, setShowReview] = useState(false);
 
   const teams = Object.keys(teamMeta);
-  const teamPlayers = players.filter(p =>
+  const teamPlayers = (Array.isArray(players) ? players : []).filter(p =>
     p.team_abbr === activeTeam &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()))
   );
