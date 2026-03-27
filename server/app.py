@@ -48,7 +48,7 @@ def signup():
     conn.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)', (username, password, is_admin))
     conn.commit()
     conn.close()
-    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, has_team=False, team=[])
+    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, captain_id=None, vc_id=None, impact_id=None, roles_locked=False, has_team=False, team=[])
 
 # ── Auth: Log In ──────────────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
@@ -76,9 +76,13 @@ def login():
     result = {
         'username': user['username'],
         'group_id': user['group_id'],
-        'total_points': user['total_points'],
-        'weekly_points': user['weekly_points'],
+        'total_points': user['total_points'] or 0,
+        'weekly_points': user['weekly_points'] or 0,
         'is_admin': (admin_pass == ADMIN_PASSWORD) or bool(user['is_admin']),
+        'captain_id': user['captain_id'],
+        'vc_id': user['vc_id'],
+        'impact_id': user['impact_id'],
+        'roles_locked': bool(user['roles_locked']),
         'has_team': len(team_ids) > 0,
         'team': team_ids,
     }
