@@ -4,6 +4,8 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import uuid
+import random
+import string
 from db import get_conn, init_db, calc_points
 import cricapi
 
@@ -206,7 +208,7 @@ def create_group():
     username = data.get('username', '').strip()
     if not name or not username:
         return jsonify(error="Group name and username required"), 400
-    code = uuid.uuid4().hex[:8].upper()
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     conn = get_conn()
     conn.execute('INSERT INTO groups_ (code, name, created_by) VALUES (?, ?, ?)', (code, name, username))
     conn.execute('UPDATE users SET group_id = ? WHERE username = ?', (code, username))
@@ -525,7 +527,7 @@ def create_league():
     username = data.get('username', '').strip()
     if not name or not username:
         return jsonify(error="League name and username required"), 400
-    code = uuid.uuid4().hex[:8].upper()
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     conn = get_conn()
     conn.execute('INSERT INTO groups_ (code, name, created_by) VALUES (?, ?, ?)', (code, name, username))
     conn.execute('INSERT OR IGNORE INTO league_members (username, league_code) VALUES (?, ?)', (username, code))

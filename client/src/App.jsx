@@ -26,26 +26,14 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('login');
   const [players, setPlayers] = useState([]);
-  const [joinCode, setJoinCode] = useState('');
-  
 
   useEffect(() => {
     api.getPlayers().then(setPlayers).catch(console.error);
-    // Check for invite link ?join=CODE
-    const params = new URLSearchParams(window.location.search);
-    const jc = params.get('join');
-    if (jc) {
-      setJoinCode(jc.toUpperCase());
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);
-    if (joinCode) {
-      setPage('group');
-    } else if (userData.is_admin) {
+    if (userData.is_admin) {
       setPage('admin');
     } else if (userData.has_team) {
       setPage('dashboard');
@@ -111,7 +99,7 @@ export default function App() {
         {page === 'builder' && <TeamBuilder user={user} players={players} onSave={() => { refreshUser(); setPage('dashboard'); }} teamMeta={TEAM_META} />}
         {page === 'dashboard' && user.is_admin && <AdminDashboard user={user} />}
         {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} />}
-        {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} teamMeta={TEAM_META} initialJoinCode={joinCode} />}
+        {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} teamMeta={TEAM_META} />}
         
         {page === 'admin' && <AdminPanel players={players} teamMeta={TEAM_META} onRefresh={refreshPlayers} />}
       </div>

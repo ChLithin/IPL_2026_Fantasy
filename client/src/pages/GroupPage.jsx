@@ -58,9 +58,8 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
     api.getLeagueLeaderboard(code).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, [code]);
 
-  const copyInvite = () => {
-    const link = `${window.location.origin}?join=${code}`;
-    navigator.clipboard.writeText(link);
+  const copyCode = () => {
+    navigator.clipboard.writeText(code);
   };
 
   if (loading) return <div className="spinner" />;
@@ -78,8 +77,8 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
       <div className="card mb-3 text-center" style={{background:'linear-gradient(135deg, rgba(249,205,27,0.12), transparent)', border:'1px solid rgba(249,205,27,0.25)'}}>
         <h3 style={{fontSize:22,fontWeight:900,color:'#fde047',marginBottom:4}}>{league.name || 'League'}</h3>
         <div className="flex items-center justify-center gap-3 mt-2">
-          <span className="text-muted text-xs" style={{letterSpacing:2}}>CODE: <span style={{color:'#fff',fontWeight:700,fontFamily:'monospace',fontSize:13}}>{code}</span></span>
-          <button className="btn btn-sm btn-secondary" onClick={copyInvite} style={{fontSize:10}}>📋 Copy Invite Link</button>
+          <span className="text-muted text-xs" style={{letterSpacing:2}}>CODE: <span style={{color:'#fff',fontWeight:700,fontFamily:'monospace',fontSize:16,letterSpacing:4}}>{code}</span></span>
+          <button className="btn btn-sm btn-secondary" onClick={copyCode} style={{fontSize:10}}>📋 Copy Code</button>
         </div>
         <div className="text-muted text-xs mt-2">{lb.length} member{lb.length !== 1 ? 's' : ''} · Created by @{league.created_by}</div>
       </div>
@@ -120,12 +119,12 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
   );
 }
 
-export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode }) {
+export default function GroupPage({ user, onUpdate, teamMeta }) {
   const [tab, setTab] = useState('my');
   const [myLeagues, setMyLeagues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [createName, setCreateName] = useState("");
-  const [joinCode, setJoinCode] = useState(initialJoinCode || "");
+  const [joinCode, setJoinCode] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [viewLeague, setViewLeague] = useState(null);
@@ -135,12 +134,7 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
   const [viewUser, setViewUser] = useState(null);
 
   useEffect(() => { loadMyLeagues(); }, []);
-  useEffect(() => {
-    if (initialJoinCode) {
-      setJoinCode(initialJoinCode);
-      setTab('join');
-    }
-  }, [initialJoinCode]);
+
 
   const loadMyLeagues = async () => {
     setLoading(true);
@@ -258,7 +252,7 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
                   </div>
                   <div className="flex gap-1" style={{flexShrink:0}}>
                     <button className="btn btn-sm btn-primary" onClick={() => setViewLeague(lg.code)} style={{fontSize:11}}>View</button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => {navigator.clipboard.writeText(`${window.location.origin}?join=${lg.code}`); setMsg("Invite link copied!")}} style={{fontSize:11}}>📋</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => {navigator.clipboard.writeText(lg.code); setMsg(`Code copied: ${lg.code}`)}} style={{fontSize:11}} title="Copy league code">📋</button>
                     {!lg.is_creator && <button className="btn btn-sm btn-secondary" onClick={() => handleLeave(lg.code, lg.name)} style={{fontSize:11,color:'#f87171'}}>Leave</button>}
                   </div>
                 </div>
@@ -279,11 +273,10 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
           </div>
           {createdCode && (
             <div className="card" style={{background:'rgba(52,211,153,0.08)',borderColor:'rgba(52,211,153,0.2)',marginTop:12}}>
-              <div className="text-xs text-muted mb-1">League created! Share this code or link:</div>
+              <div className="text-xs text-muted mb-1">League created! Share this code with friends:</div>
               <div className="flex items-center gap-2">
-                <span style={{fontFamily:'monospace',fontWeight:900,fontSize:18,color:'#34d399',letterSpacing:3}}>{createdCode}</span>
-                <button className="btn btn-sm btn-secondary" onClick={() => {navigator.clipboard.writeText(createdCode); setMsg("Code copied!")}}>📋 Code</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => {navigator.clipboard.writeText(`${window.location.origin}?join=${createdCode}`); setMsg("Invite link copied!")}}>🔗 Link</button>
+                <span style={{fontFamily:'monospace',fontWeight:900,fontSize:22,color:'#34d399',letterSpacing:4}}>{createdCode}</span>
+                <button className="btn btn-sm btn-secondary" onClick={() => {navigator.clipboard.writeText(createdCode); setMsg("Code copied!")}}>📋 Copy Code</button>
               </div>
             </div>
           )}
