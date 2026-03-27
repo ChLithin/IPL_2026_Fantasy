@@ -1,4 +1,4 @@
-const BASE = '';
+const BASE = 'https://lithinsaikumar.pythonanywhere.com';
 
 async function request(url, options = {}) {
   const res = await fetch(BASE + url, {
