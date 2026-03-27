@@ -240,7 +240,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam }) {
                     <div style={{fontWeight:700,fontSize:12}}>{p.name}</div>
                     <div className="text-xs" style={{color:tc}}>{p.team_abbr}</div>
                     <div className="flex items-center justify-center gap-1 mt-1">
-                      <span className={`badge badge-${p.role.toLowerCase()}`}>{p.role}</span>
+                      <span className={`badge badge-${(p.role || 'BAT').toLowerCase()}`}>{p.role}</span>
                       {p.overseas ? <span className="badge badge-ovs">OVS</span> : null}
                     </div>
                     <div style={{marginTop:6,height:3,borderRadius:2,background:'rgba(255,255,255,0.1)'}}>

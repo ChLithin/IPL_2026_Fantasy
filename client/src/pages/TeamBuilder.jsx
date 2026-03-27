@@ -96,7 +96,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
                 <div style={{fontWeight:600,fontSize:12}}>{p.name}</div>
                 <div className="text-xs" style={{color: teamMeta[p.team_abbr]?.color}}>{p.team_abbr}</div>
               </div>
-              <span className={`badge badge-${p.role.toLowerCase()}`}>{p.role}</span>
+              <span className={`badge badge-${(p.role || 'BAT').toLowerCase()}`}>{p.role}</span>
               <span style={{color:'#fbbf24',fontWeight:700,fontSize:12}}>₹{p.price}</span>
             </div>
           ))}
@@ -172,7 +172,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
                   <div style={{fontWeight:700,fontSize:11,marginTop:4}}>{player.name}</div>
                   <div className="text-xs" style={{color:teamMeta[activeTeam]?.color,marginTop:2}}>{player.team_abbr}</div>
                   <div className="flex items-center justify-center gap-1 mt-1">
-                    <span className={`badge badge-${player.role.toLowerCase()}`}>{ROLE_EMOJI[player.role]} {player.role}</span>
+                    <span className={`badge badge-${(player.role || 'BAT').toLowerCase()}`}>{ROLE_EMOJI[player.role]} {player.role}</span>
                     <span style={{color:'#fbbf24',fontWeight:700,fontSize:11}}>₹{player.price}Cr</span>
                   </div>
                   {player.description && <p className="text-muted" style={{fontSize:9,marginTop:6,lineHeight:1.3,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{player.description}</p>}

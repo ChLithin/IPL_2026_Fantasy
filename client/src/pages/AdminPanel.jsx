@@ -370,7 +370,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                       </div>
                     </td>
                     <td><span style={{color:teamMeta[p.team_abbr]?.color,fontWeight:700,fontSize:11}}>{p.team_abbr}</span></td>
-                    <td><span className={`badge badge-${p.role.toLowerCase()}`}>{p.role}</span></td>
+                    <td><span className={`badge badge-${(p.role || 'BAT').toLowerCase()}`}>{p.role}</span></td>
                     <td style={{color:"#fbbf24",fontWeight:700}}>₹{p.price}</td>
                     <td>{p.overseas ? <span className="badge badge-ovs">OVS</span> : "—"}</td>
                     <td>
