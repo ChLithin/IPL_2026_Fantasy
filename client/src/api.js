@@ -1,5 +1,4 @@
-const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-export const BASE = isLocal ? 'http://localhost:5555' : 'https://lithinsaikumar.pythonanywhere.com';
+export const BASE = 'https://lithinsaikumar.pythonanywhere.com';
 
 async function request(url, options = {}) {
   console.log("Requesting: " + BASE + url);
