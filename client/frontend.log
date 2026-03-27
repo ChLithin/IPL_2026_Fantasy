@@ -160,3 +160,7 @@ Error: connect ECONNREFUSED 127.0.0.1:5555
 6:01:00 PM [vite] (client) hmr update /src/App.jsx
 6:01:00 PM [vite] (client) hmr update /src/pages/Dashboard.jsx
 6:08:07 PM [vite] (client) hmr update /src/pages/Dashboard.jsx
+6:52:26 PM [vite] (client) hmr update /src/App.jsx
+6:52:26 PM [vite] (client) hmr update /src/App.jsx, /src/pages/LoginPage.jsx, /src/pages/Dashboard.jsx, /src/pages/TeamBuilder.jsx, /src/pages/AdminPanel.jsx, /src/pages/GroupPage.jsx
+6:52:51 PM [vite] (client) hmr update /src/pages/TeamBuilder.jsx
+6:53:20 PM [vite] (client) hmr update /src/pages/Dashboard.jsx

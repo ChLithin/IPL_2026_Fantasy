@@ -352,46 +352,39 @@ def update_stats():
 
 def _recalculate_user_points(conn):
     users = conn.execute('SELECT username FROM users').fetchall()
-    # Get list of all match stats
+        # Get list of all match stats
     all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
     stats_dict = {} # (pid, mid) -> points
     for s in all_stats:
         stats_dict[(s['player_id'], s['match_id'])] = s['points']
 
-    # Get all lineups
-    all_lineups = conn.execute('SELECT * FROM match_lineups').fetchall()
-    lineups_dict = {} # (user, mid) -> lineup_row
-    for l in all_lineups:
-        lineups_dict[(l['username'], l['match_id'])] = l
+    # Get user squad members
+    all_user_players = conn.execute('SELECT * FROM user_teams').fetchall()
+    u_players = {} # username -> [ids]
+    for up in all_user_players:
+        if up['username'] not in u_players: u_players[up['username']] = []
+        u_players[up['username']].append(up['player_id'])
 
     for u in users:
         username = u['username']
         total = 0
+        squad = u_players.get(username, [])
+        cap_id = u['captain_id']
+        vc_id = u['vc_id']
+        imp_id = u['impact_id']
         
-        # We need to iterate over all matches that are 'done'
+        # Iterate over all matches that are 'done'
         done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
         for m in done_matches:
             mid = m['id']
-            lineup = lineups_dict.get((username, mid))
-            if lineup:
-                pids = json.loads(lineup['player_ids']) # XI
-                imp_id = lineup['impact_id']
-                cap_id = lineup['captain_id']
-                vc_id = lineup['vc_id']
-                
-                # Active 12
-                all_12 = pids + ([imp_id] if imp_id else [])
-                for pid in all_12:
-                    pts = stats_dict.get((pid, mid), 0)
-                    mul = 1.0
-                    if pid == cap_id: mul = 2.0
-                    elif pid == vc_id: mul = 1.5
-                    total += pts * mul
-            else:
-                # FALLBACK: If no lineup set, use the base 16 (no multipliers)
-                # This ensures old matches or users who forgot to pick still get something
-                row = conn.execute('SELECT COALESCE(SUM(ps.points), 0) as total FROM user_teams ut JOIN player_stats ps ON ps.player_id = ut.player_id WHERE ut.username = ? AND ps.match_id = ?', (username, mid)).fetchone()
-                total += row['total'] if row else 0
+            # Score for all 12 players in the squad (if they played in this match)
+            for pid in squad:
+                pts = stats_dict.get((pid, mid), 0)
+                mul = 1.0
+                if pid == cap_id: mul = 2.0
+                elif pid == vc_id: mul = 1.5
+                # Impact ID gets 1.0x (standard scoring)
+                total += pts * mul
         conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?', (total, total, username))
     conn.commit()
 
@@ -405,7 +398,7 @@ def recalculate():
 @app.route('/api/admin/reset-weekly', methods=['POST'])
 def reset_weekly():
     conn = get_conn()
-    conn.execute('UPDATE users SET weekly_points = 0')
+    conn.execute('UPDATE users SET weekly_points = 0, roles_locked = 0')
     conn.commit()
     conn.close()
     return jsonify(ok=True)
@@ -477,80 +470,27 @@ def delete_group(grp_code):
 
 
 
-# ── Match Lineups (11+1) ──────────────────────────────────────────────────────
-@app.route('/api/match-lineup', methods=['POST'])
-def save_lineup():
+
+# ── Weekly Roles ─────────────────────────────────────────────────────────────
+@app.route('/api/set-roles', methods=['POST'])
+def set_roles():
     data = request.json
     username = data.get('username')
-    match_id = data.get('match_id')
-    player_ids = data.get('player_ids', []) # XI
-    impact_id = data.get('impact_id')
     captain_id = data.get('captain_id')
     vc_id = data.get('vc_id')
+    impact_id = data.get('impact_id')
     
-    if not username or not match_id:
-        return jsonify(error="User and Match required"), 400
-        
     conn = get_conn()
-    match = conn.execute('SELECT * FROM matches WHERE id = ?', (match_id,)).fetchone()
-    if not match:
+    user = conn.execute('SELECT roles_locked FROM users WHERE username = ?', (username,)).fetchone()
+    if user and user['roles_locked']:
         conn.close()
-        return jsonify(error="Match not found"), 404
-
-    # Deadline check (7:30 PM on match day)
-    # Match date format is usually YYYY-MM-DD
-    try:
-        match_dt = datetime.datetime.strptime(match['date'], "%Y-%m-%d")
-        # 7:30 PM IST is 2:00 PM (14:00) UTC
-        # If server is in IST already, hour=19; if UTC, hour=14.
-        # We will use UTC-based calculation for safety: 
-        # (datetime.now() in UTC vs match_dt @ 14:00 UTC)
-        # Actually, for most servers:
-        deadline = match_dt.replace(hour=14, minute=0) # 14:00 UTC = 19:30 IST
-        # Using a fixed offset or UTC comparison? For simpler server logic:
-        # Assuming server time is roughly correct or offset is managed.
-        # For PythonAnywhere (usually UTC), 7:30 PM IST is 2:00 PM UTC.
-        # We'll just compare against 7:30 PM of the match date in local server time for now.
-        if datetime.datetime.now() > deadline and match['status'] != 'admin_override':
-            # Allow admin to override for testing, but otherwise block
-            # (Adding a small grace period or checking against DONE status)
-            if match['status'] == 'done':
-                conn.close()
-                return jsonify(error="Match is already completed"), 400
-    except:
-        pass # Ignore date format errors for now
-
-    # Validations
-    if len(player_ids) != 11:
-        conn.close()
-        return jsonify(error="You must select exactly 11 players for the XI"), 400
-    
-    # Check overseas count in XI
-    players = conn.execute('SELECT * FROM players WHERE id IN ({})'.format(','.join(['?']*11)), player_ids).fetchall()
-    overseas_count = sum(1 for p in players if p['overseas'])
-    if overseas_count > 4:
-        conn.close()
-        return jsonify(error="Max 4 overseas allowed in XI"), 400
-
-    conn.execute('INSERT OR REPLACE INTO match_lineups (username, match_id, player_ids, captain_id, vc_id, impact_id) VALUES (?, ?, ?, ?, ?, ?)',
-                 (username, match_id, json.dumps(player_ids), captain_id, vc_id, impact_id))
+        return jsonify(error="Roles are locked for this week!"), 400
+        
+    conn.execute('UPDATE users SET captain_id=?, vc_id=?, impact_id=?, roles_locked=1 WHERE username=?',
+                 (captain_id, vc_id, impact_id, username))
     conn.commit()
     conn.close()
     return jsonify(success=True)
-
-@app.route('/api/match-lineup/<username>/<int:mid>')
-def get_lineup(username, mid):
-    conn = get_conn()
-    row = conn.execute('SELECT * FROM match_lineups WHERE username = ? AND match_id = ?', (username, mid)).fetchone()
-    conn.close()
-    if row:
-        return jsonify({
-            'player_ids': json.loads(row['player_ids']),
-            'captain_id': row['captain_id'],
-            'vc_id': row['vc_id'],
-            'impact_id': row['impact_id']
-        })
-    return jsonify(None)
 
 # ── Serve Frontend ────────────────────────────────────────────────────────────
 @app.route('/', defaults={'path': ''})
