@@ -129,3 +129,6 @@ Error: connect ECONNREFUSED 127.0.0.1:5555
 12:37:57 PM [vite] (client) hmr update /src/App.jsx, /src/pages/LoginPage.jsx, /src/pages/Dashboard.jsx, /src/pages/TeamBuilder.jsx, /src/pages/AdminPanel.jsx, /src/pages/GroupPage.jsx
 12:43:18 PM [vite] (client) hmr invalidate /src/App.jsx Could not Fast Refresh ("TEAM_META" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
 12:43:18 PM [vite] (client) page reload src/App.jsx
+12:56:32 PM [vite] (client) hmr update /src/App.jsx, /src/pages/LoginPage.jsx, /src/pages/Dashboard.jsx, /src/pages/TeamBuilder.jsx, /src/pages/AdminPanel.jsx, /src/pages/GroupPage.jsx
+12:56:33 PM [vite] (client) hmr invalidate /src/App.jsx Could not Fast Refresh ("TEAM_META" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+12:56:33 PM [vite] (client) page reload src/App.jsx
