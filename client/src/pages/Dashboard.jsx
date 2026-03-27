@@ -58,7 +58,7 @@ export function AdminDashboard({ user }) {
   );
 }
 
-export default function Dashboard({ user, players, teamMeta, onEditTeam }) {
+export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelectMatch }) {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('squad');
@@ -173,7 +173,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam }) {
               </div>
             )}
             {nextMatch ? (
-              <div className="card text-center" style={{flex:'0 0 200px', padding:'12px 8px', borderColor:'#f9cd1b', background:'linear-gradient(135deg,rgba(249,205,27,0.15),transparent)', boxShadow:'0 4px 20px rgba(249,205,27,0.1)'}}>
+              <div className="card text-center clickable" onClick={() => onSelectMatch(nextMatch)} style={{flex:'0 0 200px', padding:'12px 8px', cursor:'pointer', borderColor:'#f9cd1b', background:'linear-gradient(135deg,rgba(249,205,27,0.15),transparent)', boxShadow:'0 4px 20px rgba(249,205,27,0.1)'}}>
                 <div className="text-xs mb-1 uppercase tracking-widest" style={{color:'#fde047', fontWeight:900, fontSize:10}}>Upcoming</div>
                 <div style={{fontWeight:900, fontSize:18, marginBottom:4}}>{nextMatch.team1} <span style={{color:'rgba(255,255,255,0.3)'}}>v</span> {nextMatch.team2}</div>
                 <div className="text-xs mt-1" style={{color:'#f9cd1b'}}>{nextMatch.date || 'TBD'}</div>
@@ -182,7 +182,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam }) {
               <div className="card text-center text-muted flex items-center justify-center" style={{flex:'0 0 200px', padding:'12px 8px', fontSize:12}}>No upcoming matches</div>
             )}
             {secondNextMatch && (
-              <div className="card text-center" style={{flex:'0 0 160px', padding:'12px 8px', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)'}}>
+              <div className="card text-center clickable" onClick={() => onSelectMatch(secondNextMatch)} style={{flex:'0 0 160px', padding:'12px 8px', cursor:'pointer', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)'}}>
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest" style={{fontSize:9}}>Following</div>
                 <div style={{fontWeight:900, fontSize:15, marginBottom:4}}>{secondNextMatch.team1} <span className="text-muted text-xs mx-1">v</span> {secondNextMatch.team2}</div>
                 <div className="text-xs text-muted mt-1">{secondNextMatch.date || 'TBD'}</div>

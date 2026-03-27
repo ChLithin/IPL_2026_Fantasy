@@ -130,6 +130,17 @@ def init_db():
             description TEXT DEFAULT '',
             status TEXT DEFAULT 'upcoming'
         );
+                CREATE TABLE IF NOT EXISTS match_lineups (
+            username TEXT NOT NULL,
+            match_id INTEGER NOT NULL,
+            player_ids TEXT NOT NULL,
+            captain_id INTEGER,
+            vc_id INTEGER,
+            impact_id INTEGER,
+            PRIMARY KEY (username, match_id),
+            FOREIGN KEY (username) REFERENCES users(username),
+            FOREIGN KEY (match_id) REFERENCES matches(id)
+        );
         CREATE TABLE IF NOT EXISTS player_stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             player_id INTEGER NOT NULL,

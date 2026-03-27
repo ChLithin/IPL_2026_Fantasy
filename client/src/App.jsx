@@ -5,6 +5,7 @@ import TeamBuilder from './pages/TeamBuilder';
 import Dashboard, { AdminDashboard } from './pages/Dashboard';
 import GroupPage from './pages/GroupPage';
 import AdminPanel from './pages/AdminPanel';
+import MatchLineup from './pages/MatchLineupPage';
 
 const TEAM_META = {
   CSK: { color: '#F9CD1B', name: 'Chennai Super Kings' },
@@ -25,6 +26,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('login');
   const [players, setPlayers] = useState([]);
+  const [selLineupMatch, setSelLineupMatch] = useState(null);
 
   useEffect(() => {
     api.getPlayers().then(setPlayers).catch(console.error);
@@ -97,8 +99,17 @@ export default function App() {
       <div className="container" style={{paddingTop:16,paddingBottom:32}}>
         {page === 'builder' && <TeamBuilder user={user} players={players} onSave={() => { refreshUser(); setPage('dashboard'); }} teamMeta={TEAM_META} />}
         {page === 'dashboard' && user.is_admin && <AdminDashboard user={user} />}
-        {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} />}
-        {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} />}
+        {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} onSelectMatch={(m) => { setSelLineupMatch(m); setPage('lineup'); }} />}
+                {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} />}
+        {page === 'lineup' && selLineupMatch && (
+          <MatchLineup 
+            user={user} 
+            match={selLineupMatch} 
+            players={players} 
+            teamMeta={TEAM_META} 
+            onBack={() => setPage('dashboard')} 
+          />
+        )}
         {page === 'admin' && <AdminPanel players={players} teamMeta={TEAM_META} onRefresh={refreshPlayers} />}
       </div>
     </div>
