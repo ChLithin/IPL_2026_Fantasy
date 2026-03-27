@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api } from "../api";
+import { api, BASE } from '../api';
 
 const TEAMS = ["CSK","RCB","MI","KKR","SRH","DC","RR","LSG","GT","PBKS"];
 

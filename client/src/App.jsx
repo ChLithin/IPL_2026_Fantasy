@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from './api';
+import { api, BASE } from './api';
 import LoginPage from './pages/LoginPage';
 import TeamBuilder from './pages/TeamBuilder';
 import Dashboard, { AdminDashboard } from './pages/Dashboard';
