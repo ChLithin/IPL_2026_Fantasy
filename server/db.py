@@ -163,21 +163,35 @@ def init_db():
     if not has_settings:
         conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
         
-    # --- MIGRATIONS ---
-    # Since 'CREATE TABLE IF NOT EXISTS' doesn't add new columns, we check and add them manually.
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN captain_id INTEGER")
-    except: pass
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN vc_id INTEGER")
-    except: pass
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN impact_id INTEGER")
-    except: pass
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN roles_locked INTEGER DEFAULT 0")
-    except: pass
-    # ------------------
+    
+    # --- ROBUST MIGRATIONS ---
+    cursor = conn.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    needed = [
+        ("captain_id", "INTEGER"),
+        ("vc_id", "INTEGER"),
+        ("impact_id", "INTEGER"),
+        ("roles_locked", "INTEGER DEFAULT 0")
+    ]
+    
+    for col_name, col_type in needed:
+        if col_name not in columns:
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                print(f"Migration: Added {col_name} to users table.")
+            except Exception as e:
+                print(f"Migration Error on {col_name}: {e}")
+    
+    # Check players table too just in case
+    cursor = conn.execute("PRAGMA table_info(players)")
+    p_cols = [row[1] for row in cursor.fetchall()]
+    if "description" not in p_cols:
+        conn.execute("ALTER TABLE players ADD COLUMN description TEXT")
+    if "image" not in p_cols:
+        conn.execute("ALTER TABLE players ADD COLUMN image TEXT")
+    # --------------------------
+
 
     conn.commit()
     if not admin:
