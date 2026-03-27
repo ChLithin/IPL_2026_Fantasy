@@ -5,6 +5,7 @@ import TeamBuilder from './pages/TeamBuilder';
 import Dashboard, { AdminDashboard } from './pages/Dashboard';
 import GroupPage from './pages/GroupPage';
 import AdminPanel from './pages/AdminPanel';
+import Home from './pages/Home';
 
 
 const TEAM_META = {
@@ -35,16 +36,16 @@ export default function App() {
     setUser(userData);
     if (userData.is_admin) {
       setPage('admin');
-    } else if (userData.has_team) {
-      setPage('dashboard');
     } else {
-      setPage('builder');
+      setPage('home');
     }
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setPage('login');
+    if (window.confirm("Are you sure you want to log out?")) {
+      setUser(null);
+      setPage('login');
+    }
   };
 
   const refreshUser = async () => {
@@ -65,7 +66,7 @@ export default function App() {
   const nav = (
     <div className="header">
       <div className="header-inner">
-        <div className="flex items-center gap-2" style={{cursor:'pointer'}} onClick={() => setPage(user.is_admin ? 'admin' : 'dashboard')}>
+        <div className="flex items-center gap-2" style={{cursor:'pointer'}} onClick={() => setPage(user.is_admin ? 'admin' : 'home')}>
           <span style={{fontSize:24}}>🏆</span>
           <div>
             <div style={{fontWeight:900,fontSize:14}}>IPL Fantasy</div>
@@ -75,8 +76,8 @@ export default function App() {
         <div className="flex gap-1">
           {!user.is_admin && (
             <>
-              <button className={`tab ${page==='dashboard'?'active':''}`} onClick={() => {refreshUser(); setPage('dashboard')}}>📊 Dashboard</button>
-              
+              <button className={`tab ${page==='home'?'active':''}`} onClick={() => setPage('home')}>🏠 Home</button>
+              <button className={`tab ${page==='dashboard'?'active':''}`} onClick={() => {refreshUser(); setPage('dashboard')}}>🏏 Your Team</button>
               <button className={`tab ${page==='group'?'active':''}`} onClick={() => setPage('group')}>🏆 Leagues</button>
             </>
           )}
@@ -86,7 +87,7 @@ export default function App() {
               <button className={`tab ${page==='dashboard'?'active':''}`} onClick={() => {refreshUser(); setPage('dashboard')}}>📊 View</button>
             </>
           )}
-          <button className="tab" onClick={handleLogout}>🚪</button>
+          <button className="tab" onClick={handleLogout} style={{marginLeft: 8}}>🚪 Logout</button>
         </div>
       </div>
     </div>
@@ -96,6 +97,7 @@ export default function App() {
     <div className="page">
       {nav}
       <div className="container" style={{paddingTop:16,paddingBottom:32}}>
+        {page === 'home' && <Home user={user} setPage={setPage} />}
         {page === 'builder' && <TeamBuilder user={user} players={players} onSave={() => { refreshUser(); setPage('dashboard'); }} teamMeta={TEAM_META} />}
         {page === 'dashboard' && user.is_admin && <AdminDashboard user={user} />}
         {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} />}
