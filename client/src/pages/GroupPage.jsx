@@ -130,6 +130,9 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
   const [err, setErr] = useState("");
   const [viewLeague, setViewLeague] = useState(null);
   const [createdCode, setCreatedCode] = useState(null);
+  const [globalLb, setGlobalLb] = useState([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [viewUser, setViewUser] = useState(null);
 
   useEffect(() => { loadMyLeagues(); }, []);
   useEffect(() => {
@@ -146,6 +149,15 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
       setMyLeagues(lg);
     } catch (e) { console.error(e); }
     setLoading(false);
+  };
+
+  const loadGlobal = async () => {
+    setGlobalLoading(true);
+    try {
+      const lb = await api.getGlobalLeaderboard();
+      setGlobalLb(lb);
+    } catch (e) { console.error(e); }
+    setGlobalLoading(false);
   };
 
   const handleCreate = async () => {
@@ -201,6 +213,7 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
 
       <div className="tabs mb-4">
         <button className={`tab ${tab==='my'?'active':''}`} onClick={() => setTab('my')}>📋 My Leagues</button>
+        <button className={`tab ${tab==='global'?'active':''}`} onClick={() => { setTab('global'); if(globalLb.length===0) loadGlobal(); }}>🌍 Global</button>
         <button className={`tab ${tab==='create'?'active':''}`} onClick={() => setTab('create')}>➕ Create</button>
         <button className={`tab ${tab==='join'?'active':''}`} onClick={() => setTab('join')}>🔗 Join</button>
       </div>
@@ -297,6 +310,52 @@ export default function GroupPage({ user, onUpdate, teamMeta, initialJoinCode })
               <div className="text-xs text-muted">Ask a friend for their league code or use an invite link</div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Global League ── */}
+      {tab === 'global' && (
+        <div>
+          {viewUser && <TeamModal username={viewUser} teamMeta={teamMeta} onClose={() => setViewUser(null)} />}
+          <div className="card mb-3 text-center" style={{background:'linear-gradient(135deg, rgba(99,102,241,0.12), transparent)', border:'1px solid rgba(99,102,241,0.25)'}}>
+            <h3 style={{fontSize:20,fontWeight:900,color:'#a5b4fc',marginBottom:4}}>🌍 Global League</h3>
+            <p className="text-muted text-xs">Top 100 players across the entire platform</p>
+          </div>
+          <div className="card">
+            {globalLoading && <div className="spinner" />}
+            {!globalLoading && globalLb.length === 0 && <p className="text-muted text-center" style={{padding:40}}>No players with teams yet</p>}
+            {globalLb.map((u,i) => {
+              const isYou = u.username === user.username;
+              return (
+                <div key={u.username} className="flex items-center gap-3" style={{
+                  padding:12,borderRadius:12,marginBottom:6,cursor:'pointer',transition:'all 0.15s',
+                  border: isYou ? '1px solid rgba(249,205,27,0.3)' : '1px solid rgba(255,255,255,0.05)',
+                  background: isYou ? 'rgba(249,205,27,0.05)' : 'transparent',
+                }} onClick={() => setViewUser(u.username)}
+                   onMouseOver={e => { if(!isYou) e.currentTarget.style.background='rgba(255,255,255,0.03)'; }}
+                   onMouseOut={e => { if(!isYou) e.currentTarget.style.background='transparent'; }}
+                >
+                  <div style={{width:28,textAlign:'center',flexShrink:0}}>
+                    {i < 3 ? <span style={{fontSize:16}}>{['🥇','🥈','🥉'][i]}</span> : <span className="text-muted text-xs font-bold">{i+1}</span>}
+                  </div>
+                  <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#334155,#1e293b)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:13,border:'1px solid rgba(255,255,255,0.1)',flexShrink:0}}>
+                    {u.username[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1" style={{minWidth:0}}>
+                    <div className="truncate" style={{fontWeight:700,fontSize:13,color:isYou?'#fde047':'#fff'}}>
+                      {u.username} {isYou && <span className="text-muted text-xs">(you)</span>}
+                    </div>
+                    <div style={{color:'#34d399',fontSize:11}}>+{u.weekly_points} this week</div>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <div style={{fontWeight:900,fontSize:14}}>{u.total_points}</div>
+                    <div className="text-muted text-xs">total</div>
+                  </div>
+                  <div style={{color:'rgba(255,255,255,0.3)',fontSize:10,flexShrink:0}}>👁</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

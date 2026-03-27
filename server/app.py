@@ -518,7 +518,7 @@ def delete_group(grp_code):
 
 # ── League endpoints (multi-league) ──────────────────────────────────────────
 
-@app.route('/api/league', methods=['POST'])
+@app.route('/api/leagues/create', methods=['POST'])
 def create_league():
     data = request.json
     name = data.get('name', '').strip()
@@ -533,7 +533,7 @@ def create_league():
     conn.close()
     return jsonify(code=code, name=name)
 
-@app.route('/api/league/join', methods=['POST'])
+@app.route('/api/leagues/join', methods=['POST'])
 def join_league():
     data = request.json
     code = data.get('code', '').strip().upper()
@@ -558,21 +558,21 @@ def join_league():
     conn.close()
     return jsonify(code=code, name=group['name'])
 
-@app.route('/api/league/<code>/leave', methods=['POST'])
-def leave_league(code):
+@app.route('/api/leagues/<league_code>/leave', methods=['POST'])
+def leave_league(league_code):
     data = request.json
     username = data.get('username', '').strip()
     if not username:
         return jsonify(error="Username required"), 400
     conn = get_conn()
-    conn.execute('DELETE FROM league_members WHERE username = ? AND league_code = ?', (username, code))
-    conn.execute('UPDATE users SET group_id = NULL WHERE username = ? AND group_id = ?', (username, code))
+    conn.execute('DELETE FROM league_members WHERE username = ? AND league_code = ?', (username, league_code))
+    conn.execute('UPDATE users SET group_id = NULL WHERE username = ? AND group_id = ?', (username, league_code))
     conn.commit()
     conn.close()
     return jsonify(ok=True)
 
-@app.route('/api/league/<code>/leaderboard')
-def league_leaderboard(code):
+@app.route('/api/leagues/<league_code>/leaderboard')
+def league_leaderboard(league_code):
     conn = get_conn()
     users = conn.execute('''
         SELECT u.username, u.total_points, u.weekly_points
@@ -580,8 +580,8 @@ def league_leaderboard(code):
         JOIN users u ON lm.username = u.username
         WHERE lm.league_code = ?
         ORDER BY u.total_points DESC, u.weekly_points DESC
-    ''', (code,)).fetchall()
-    group = conn.execute('SELECT * FROM groups_ WHERE code = ?', (code,)).fetchone()
+    ''', (league_code,)).fetchall()
+    group = conn.execute('SELECT * FROM groups_ WHERE code = ?', (league_code,)).fetchone()
     conn.close()
     result = []
     for i, u in enumerate(users):
@@ -650,6 +650,24 @@ def user_team_public(username):
         team=[dict(r) for r in team_rows]
     )
 
+# ── Global Leaderboard ────────────────────────────────────────────────────────
+@app.route('/api/global-leaderboard')
+def global_leaderboard():
+    """Top 100 users across the entire platform."""
+    conn = get_conn()
+    users = conn.execute('''
+        SELECT u.username, u.total_points, u.weekly_points
+        FROM users u
+        WHERE u.is_admin = 0
+        AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.username = u.username)
+        ORDER BY u.total_points DESC, u.weekly_points DESC
+        LIMIT 100
+    ''').fetchall()
+    conn.close()
+    result = []
+    for i, u in enumerate(users):
+        result.append({'rank': i + 1, 'username': u['username'], 'weekly_points': u['weekly_points'], 'total_points': u['total_points']})
+    return jsonify(result)
 
 # ── CricAPI Integration ──────────────────────────────────────────────────────
 

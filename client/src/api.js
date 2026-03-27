@@ -72,14 +72,15 @@ api.deleteGroup = (code) =>
 
 // League system (multi-league)
 api.createLeague = (username, name) =>
-  request('/api/league', { method: 'POST', body: JSON.stringify({ username, name }) });
+  request('/api/leagues/create', { method: 'POST', body: JSON.stringify({ username, name }) });
 api.joinLeague = (username, code) =>
-  request('/api/league/join', { method: 'POST', body: JSON.stringify({ username, code }) });
+  request('/api/leagues/join', { method: 'POST', body: JSON.stringify({ username, code }) });
 api.leaveLeague = (username, code) =>
-  request(`/api/league/${code}/leave`, { method: 'POST', body: JSON.stringify({ username }) });
-api.getLeagueLeaderboard = (code) => request(`/api/league/${code}/leaderboard`);
+  request(`/api/leagues/${code}/leave`, { method: 'POST', body: JSON.stringify({ username }) });
+api.getLeagueLeaderboard = (code) => request(`/api/leagues/${code}/leaderboard`);
 api.getMyLeagues = (username) => request(`/api/user/${username}/leagues`);
 api.getUserTeamPublic = (username) => request(`/api/user/${username}/team-public`);
+api.getGlobalLeaderboard = () => request('/api/global-leaderboard');
 
 // CricAPI integration
 api.getCricApiConfig = () => request('/api/admin/cricapi/config');
