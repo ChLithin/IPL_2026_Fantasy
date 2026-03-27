@@ -99,7 +99,7 @@ export default function App() {
       <div className="container" style={{paddingTop:16,paddingBottom:32}}>
         {page === 'builder' && <TeamBuilder user={user} players={players} onSave={() => { refreshUser(); setPage('dashboard'); }} teamMeta={TEAM_META} />}
         {page === 'dashboard' && user.is_admin && <AdminDashboard user={user} />}
-        {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} } />}
+        {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} />}
                 {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} />}
         
         {page === 'admin' && <AdminPanel players={players} teamMeta={TEAM_META} onRefresh={refreshPlayers} />}

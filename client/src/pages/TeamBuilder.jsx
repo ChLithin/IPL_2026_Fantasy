@@ -238,6 +238,25 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
                 <div className="text-muted text-xs">Overseas</div>
               </div>
             </div>
+            
+            <div className="grid-4 mb-2 gap-1 text-center text-xs">
+              <div className="card" style={{padding:'4px 2px'}}>
+                <div style={{fontWeight:800}}>{selected.filter(p => p.role === 'BAT').length}</div>
+                <div className="text-muted" style={{fontSize:9}}>BAT</div>
+              </div>
+              <div className="card" style={{padding:'4px 2px'}}>
+                <div style={{fontWeight:800}}>{selected.filter(p => p.role === 'BOWL').length}</div>
+                <div className="text-muted" style={{fontSize:9}}>BOWL</div>
+              </div>
+              <div className="card" style={{padding:'4px 2px'}}>
+                <div style={{fontWeight:800}}>{selected.filter(p => p.role === 'AR').length}</div>
+                <div className="text-muted" style={{fontSize:9}}>AR</div>
+              </div>
+              <div className="card" style={{padding:'4px 2px'}}>
+                <div style={{fontWeight:800}}>{selected.filter(p => p.role === 'WK').length}</div>
+                <div className="text-muted" style={{fontSize:9}}>WK</div>
+              </div>
+            </div>
             {selected.length > 0 && (
               <div style={{maxHeight:240,overflowY:'auto',marginBottom:12}}>
                 {selected.map(p => (
