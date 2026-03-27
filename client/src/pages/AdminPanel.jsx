@@ -3,6 +3,127 @@ import { api, BASE } from '../api';
 
 const TEAMS = ["CSK","RCB","MI","KKR","SRH","DC","RR","LSG","GT","PBKS"];
 
+function AdminTeamModal({ username, teamMeta, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getUserTeamPublic(username).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  }, [username]);
+
+  return (
+    <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.85)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
+      <div className="card" style={{width:'100%',maxWidth:600,maxHeight:'85vh',overflowY:'auto',background:'#0f172a',borderColor:'rgba(255,255,255,0.15)'}} onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h3 style={{fontWeight:900,fontSize:18}}>{username}'s Squad</h3>
+            {data && <span className="text-muted text-xs">{data.total_points} pts total</span>}
+          </div>
+          <button className="btn btn-sm btn-secondary" onClick={onClose}>✕</button>
+        </div>
+        {loading && <div className="spinner" />}
+        {!loading && !data && <p className="text-muted text-center py-4">Could not load team</p>}
+        {data && data.team && (
+          <div className="grid-3" style={{gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))'}}>
+            {data.team.map(p => {
+              const tc = teamMeta[p.team_abbr]?.color || '#666';
+              return (
+                <div key={p.id} className="card" style={{padding:10,textAlign:'center',position:'relative'}}>
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:tc}} />
+                  {p.id === data.captain_id && <span className="badge" style={{position:'absolute',top:6,left:6,background:'#fbbf24',color:'#000',fontWeight:900,fontSize:8}}>C</span>}
+                  {p.id === data.vc_id && <span className="badge" style={{position:'absolute',top:6,left:6,background:'#818cf8',color:'#000',fontWeight:900,fontSize:8}}>VC</span>}
+                  <img src={`${BASE}/images/${p.image}`} className="player-img" style={{width:40,height:40,margin:'6px auto 4px'}} onError={e => e.target.style.display='none'} />
+                  <div style={{fontWeight:700,fontSize:11}}>{p.name}</div>
+                  <div className="text-xs" style={{color:tc}}>{p.team_abbr}</div>
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    <span className={`badge badge-${(p.role||'BAT').toLowerCase()}`} style={{fontSize:8}}>{p.role}</span>
+                    {p.overseas ? <span className="badge badge-ovs" style={{fontSize:8}}>OVS</span> : null}
+                  </div>
+                  <div style={{color:'#fbbf24',fontWeight:700,fontSize:10,marginTop:4}}>₹{p.price}Cr · {p.earned_points||0}pts</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {data && data.team && data.team.length === 0 && <p className="text-muted text-center py-4">No squad built yet</p>}
+      </div>
+    </div>
+  );
+}
+
+function LeagueRow({ league, teamMeta, onKick, onDelete, onRefresh }) {
+  const [expanded, setExpanded] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [viewUser, setViewUser] = useState(null);
+
+  const fetchMembers = async () => {
+    setLoading(true);
+    try {
+      const d = await api.getLeagueLeaderboard(league.code);
+      setMembers(d.leaderboard || []);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  const toggleExpand = () => {
+    if (!expanded && members.length === 0) {
+      fetchMembers();
+    }
+    setExpanded(!expanded);
+  };
+
+  const handleKick = async (username) => {
+    await onKick(league.code, username);
+    fetchMembers();
+  };
+
+  return (
+    <div className="card mb-2" style={{borderColor:'rgba(255,255,255,0.05)', padding: '12px 16px', background: 'rgba(0,0,0,0.2)'}}>
+      <div className="flex justify-between items-center">
+        <div>
+          <div style={{fontWeight:800,fontSize:15}}>{league.name}</div>
+          <div className="text-muted text-xs">Created by @{league.created_by} · Code: <span style={{fontFamily:'monospace', color:'#34d399'}}>{league.code}</span></div>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn btn-sm btn-secondary" onClick={toggleExpand}>
+            {expanded ? "Hide Members ▲" : "View Members ▼"}
+          </button>
+          <button className="btn btn-sm btn-danger" onClick={() => onDelete(league.code)}>🗑 Delete</button>
+        </div>
+      </div>
+      
+      {expanded && (
+        <div className="mt-3" style={{borderTop:'1px solid rgba(255,255,255,0.05)', paddingTop:12}}>
+          {loading ? <div className="spinner my-2" /> : members.length === 0 ? <p className="text-muted text-xs">No members found.</p> : (
+            <div className="flex flex-col gap-2">
+              {members.map((m, i) => (
+                <div key={m.username} className="flex justify-between items-center" style={{background:'rgba(255,255,255,0.02)', padding:'6px 12px', borderRadius:6}}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted text-xs" style={{width: 16}}>{i+1}.</span>
+                    <span style={{fontWeight: 600, fontSize: 13}}>{m.username}</span>
+                    <span style={{color:'#fbbf24', fontSize:11}}>{m.total_points} pts</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="btn btn-sm btn-secondary" style={{fontSize: 10, padding: '4px 8px'}} onClick={() => setViewUser(m.username)}>👁 View Squad</button>
+                    {m.username !== league.created_by && (
+                      <button className="btn btn-sm btn-danger" style={{fontSize: 10, padding: '4px 8px'}} onClick={() => handleKick(m.username)}>Kick ✖</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {viewUser && <AdminTeamModal username={viewUser} teamMeta={teamMeta} onClose={() => setViewUser(null)} />}
+    </div>
+  );
+}
+
 export default function AdminPanel({ players, teamMeta, onRefresh }) {
   const [tab, setTab] = useState("matches");
   const [matches, setMatches] = useState([]);
@@ -301,7 +422,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
         <button className={`tab ${tab==="matches"?"active":""}`} onClick={() => setTab("matches")}>🏏 Matches</button>
         <button className={`tab ${tab==="players"?"active":""}`} onClick={() => setTab("players")}>👤 Players</button>
         <button className={`tab ${tab==="users"?"active":""}`} onClick={() => setTab("users")}>👥 Users</button>
-        <button className={`tab ${tab==="groups"?"active":""}`} onClick={() => setTab("groups")}>🛡️ Groups</button>
+        <button className={`tab ${tab==="leagues"?"active":""}`} onClick={() => setTab("leagues")}>🏆 Leagues</button>
         <button className={`tab ${tab==="cricapi"?"active":""}`} onClick={() => { setTab("cricapi"); loadCricStatus(); }}>🤖 CricAPI</button>
         <button className={`tab ${tab==="controls"?"active":""}`} onClick={() => setTab("controls")}>🎛️ Controls</button>
       </div>
@@ -523,52 +644,22 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
         </div>
       )}
 
-      {tab === "groups" && (
+      {tab === "leagues" && (
         <div>
           <div className="card mb-3">
-            <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Create New Group (Admin)</div>
+            <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Create New League (Admin)</div>
             <div className="flex gap-2">
-              <input className="input flex-1" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name…" />
+              <input className="input flex-1" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="League name…" />
               <button className="btn btn-primary" onClick={handleCreateGroup}>Create</button>
             </div>
           </div>
           
           <div className="card">
-            <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Active Groups & Member Management</div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Code</th><th>Name</th><th>Creator</th><th>Members</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                  {groups.map(g => {
-                    const members = users.filter(u => u.group_id === g.code);
-                    return (
-                      <tr key={g.code}>
-                        <td style={{fontFamily:"monospace",fontWeight:700,color:"#fbbf24"}}>{g.code}</td>
-                        <td style={{fontWeight:700}}>{g.name}</td>
-                        <td className="text-muted">{g.created_by}</td>
-                        <td>
-                          {members.length === 0 ? <span className="text-muted text-xs">Empty</span> : (
-                            <div className="flex flex-col gap-1">
-                              {members.map(m => (
-                                <div key={m.username} className="flex items-center justify-between" style={{background:"rgba(255,255,255,0.05)",padding:"2px 8px",borderRadius:4,fontSize:11}}>
-                                  <span>{m.username}</span>
-                                  <button onClick={() => handleKick(g.code, m.username)} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:12}}>✖</button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteGroup(g.code)}>🗑 Delete</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Active Leagues</div>
+            {groups.length === 0 && <p className="text-muted text-center" style={{padding:20}}>No leagues yet</p>}
+            {groups.map(g => (
+              <LeagueRow key={g.code} league={g} teamMeta={teamMeta} onKick={handleKick} onDelete={handleDeleteGroup} onRefresh={() => { loadGroups(); loadUsers(); }} />
+            ))}
           </div>
         </div>
       )}
