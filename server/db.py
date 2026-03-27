@@ -4,7 +4,7 @@ import csv
 import re
 import uuid
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fantasy.db')
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fantasy_v2.db')
 CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scrape', 'data.csv')
 
 # Known Indian player names - everyone else is overseas
@@ -78,7 +78,7 @@ def parse_price(price_str):
     return 0.0
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     # conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -104,7 +104,11 @@ def init_db():
             group_id TEXT DEFAULT NULL,
             total_points INTEGER DEFAULT 0,
             weekly_points INTEGER DEFAULT 0,
-            is_admin INTEGER DEFAULT 0
+            is_admin INTEGER DEFAULT 0,
+            captain_id INTEGER,
+            vc_id INTEGER,
+            impact_id INTEGER,
+            roles_locked INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY,
@@ -134,6 +138,17 @@ def init_db():
             status TEXT DEFAULT 'upcoming',
             cricapi_match_id TEXT DEFAULT ''
         );
+                CREATE TABLE IF NOT EXISTS match_lineups (
+            username TEXT NOT NULL,
+            match_id INTEGER NOT NULL,
+            player_ids TEXT NOT NULL,
+            captain_id INTEGER,
+            vc_id INTEGER,
+            impact_id INTEGER,
+            PRIMARY KEY (username, match_id),
+            FOREIGN KEY (username) REFERENCES users(username),
+            FOREIGN KEY (match_id) REFERENCES matches(id)
+        );
         CREATE TABLE IF NOT EXISTS player_stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             player_id INTEGER NOT NULL,
@@ -155,7 +170,29 @@ def init_db():
     has_settings = conn.execute('SELECT 1 FROM settings WHERE id = 1').fetchone()
     if not has_settings:
         conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
-        conn.commit()
+        
+    
+    
+
+
+    
+    # --- ROBUST MIGRATIONS ---
+    cursor = conn.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cursor.fetchall()]
+    needed = [
+        ("captain_id", "INTEGER"),
+        ("vc_id", "INTEGER"),
+        ("impact_id", "INTEGER"),
+        ("roles_locked", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_type in needed:
+        if col_name not in columns:
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+            except: pass
+    # --------------------------
+
+    conn.commit()
     if not admin:
         conn.execute('INSERT INTO users (username, is_admin) VALUES (?, ?)', ('admin', 1))
         conn.commit()

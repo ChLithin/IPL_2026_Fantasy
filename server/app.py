@@ -1,3 +1,5 @@
+import datetime
+import json
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
@@ -6,6 +8,20 @@ from db import get_conn, init_db, calc_points
 import cricapi
 
 app = Flask(__name__)
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if hasattr(e, 'code'):
+        return jsonify(error=str(e)), e.code
+    # Non-HTTP exceptions
+    trace = traceback.format_exc()
+    print("--- SERVER ERROR TRACEBACK ---")
+    print(trace)
+    return jsonify(error="Internal Server Error", detail=str(e)), 500
+
 CORS(app)
 
 ADMIN_PASSWORD = "ipl2026admin"
@@ -33,7 +49,7 @@ def signup():
     conn.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)', (username, password, is_admin))
     conn.commit()
     conn.close()
-    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, has_team=False, team=[])
+    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, captain_id=None, vc_id=None, impact_id=None, roles_locked=False, has_team=False, team=[])
 
 # ── Auth: Log In ──────────────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
@@ -61,9 +77,13 @@ def login():
     result = {
         'username': user['username'],
         'group_id': user['group_id'],
-        'total_points': user['total_points'],
-        'weekly_points': user['weekly_points'],
+        'total_points': user['total_points'] or 0,
+        'weekly_points': user['weekly_points'] or 0,
         'is_admin': (admin_pass == ADMIN_PASSWORD) or bool(user['is_admin']),
+        'captain_id': user['captain_id'],
+        'vc_id': user['vc_id'],
+        'impact_id': user['impact_id'],
+        'roles_locked': bool(user['roles_locked']),
         'has_team': len(team_ids) > 0,
         'team': team_ids,
     }
@@ -125,15 +145,32 @@ def save_team():
     total_price = sum(p['price'] for p in players)
     overseas_count = sum(1 for p in players if p['overseas'])
     team_counts = {}
+    roles = {}
     for p in players:
         team_counts[p['team_abbr']] = team_counts.get(p['team_abbr'], 0) + 1
+        roles[p['role']] = roles.get(p['role'], 0) + 1
+        
+    wk_count = roles.get('WK', 0)
+    bat_count = roles.get('BAT', 0) + wk_count
+    ar_count = roles.get('AR', 0)
+    bowl_count = roles.get('BOWL', 0)
+
     errors = []
-    if len(players) > 16:
-        errors.append("Max 16 players")
+    if len(players) != 12:
+        errors.append(f"Exactly 12 players required, got {len(players)}")
     if total_price > 100:
         errors.append(f"Budget exceeded: {total_price} Cr")
-    if overseas_count > 5:
-        errors.append(f"Max 5 overseas, got {overseas_count}")
+    if overseas_count > 4:
+        errors.append(f"Max 4 overseas, got {overseas_count}")
+    if wk_count < 1:
+        errors.append("Min 1 Wicket Keeper required")
+    if bat_count < 3 or bat_count > 6:
+        errors.append("Batsmen (+WK) must be between 3 and 6")
+    if ar_count < 1 or ar_count > 5:
+        errors.append("All-rounders must be between 1 and 5")
+    if bowl_count < 3 or bowl_count > 6:
+        errors.append("Bowlers must be between 3 and 6")
+        
     for t, c in team_counts.items():
         if c > 3:
             errors.append(f"Max 3 from {t}, got {c}")
@@ -247,7 +284,7 @@ def get_user(username):
         if group:
             group_info = dict(group)
     conn.close()
-    return jsonify(username=user['username'], group_id=user['group_id'], total_points=user['total_points'], weekly_points=user['weekly_points'], is_admin=bool(user['is_admin']), team=[dict(r) for r in team_rows], group=group_info)
+    return jsonify(username=user['username'], group_id=user['group_id'], total_points=user['total_points'], weekly_points=user['weekly_points'], is_admin=bool(user['is_admin']), captain_id=user['captain_id'], vc_id=user['vc_id'], impact_id=user['impact_id'], roles_locked=bool(user['roles_locked']), team=[dict(r) for r in team_rows], group=group_info)
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -350,11 +387,40 @@ def update_stats():
     return jsonify(ok=True)
 
 def _recalculate_user_points(conn):
-    users = conn.execute('SELECT username FROM users').fetchall()
+    users = conn.execute('SELECT username, captain_id, vc_id, impact_id FROM users').fetchall()
+        # Get list of all match stats
+    all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
+    stats_dict = {} # (pid, mid) -> points
+    for s in all_stats:
+        stats_dict[(s['player_id'], s['match_id'])] = s['points']
+
+    # Get user squad members
+    all_user_players = conn.execute('SELECT * FROM user_teams').fetchall()
+    u_players = {} # username -> [ids]
+    for up in all_user_players:
+        if up['username'] not in u_players: u_players[up['username']] = []
+        u_players[up['username']].append(up['player_id'])
+
     for u in users:
         username = u['username']
-        row = conn.execute('SELECT COALESCE(SUM(ps.points), 0) as total FROM user_teams ut JOIN player_stats ps ON ps.player_id = ut.player_id WHERE ut.username = ?', (username,)).fetchone()
-        total = row['total'] if row else 0
+        total = 0
+        squad = u_players.get(username, [])
+        cap_id = u['captain_id']
+        vc_id = u['vc_id']
+        imp_id = u['impact_id']
+        
+        # Iterate over all matches that are 'done'
+        done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
+        for m in done_matches:
+            mid = m['id']
+            # Score for all 12 players in the squad (if they played in this match)
+            for pid in squad:
+                pts = stats_dict.get((pid, mid), 0)
+                mul = 1.0
+                if pid == cap_id: mul = 2.0
+                elif pid == vc_id: mul = 1.5
+                # Impact ID gets 1.0x (standard scoring)
+                total += pts * mul
         conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?', (total, total, username))
     conn.commit()
 
@@ -368,7 +434,7 @@ def recalculate():
 @app.route('/api/admin/reset-weekly', methods=['POST'])
 def reset_weekly():
     conn = get_conn()
-    conn.execute('UPDATE users SET weekly_points = 0')
+    conn.execute('UPDATE users SET weekly_points = 0, roles_locked = 0')
     conn.commit()
     conn.close()
     return jsonify(ok=True)

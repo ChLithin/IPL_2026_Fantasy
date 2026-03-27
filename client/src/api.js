@@ -61,6 +61,9 @@ export const api = {
   deleteMatch: (id) =>
     request(`/api/admin/match/${id}`, { method: 'DELETE' }),
   updateMatchStatus: (id, status) => request(`/api/admin/match/${id}/status`, { method: "PUT", body: JSON.stringify({status}) }),
+  
+  
+  setRoles: (data) => request('/api/set-roles', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Additional method for deleting groups
