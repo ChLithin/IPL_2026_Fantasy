@@ -518,6 +518,28 @@ def delete_group(grp_code):
     return jsonify(ok=True)
 
 
+# ── Weekly Roles ─────────────────────────────────────────────────────────────
+@app.route('/api/set-roles', methods=['POST'])
+def set_roles():
+    data = request.json
+    username = data.get('username')
+    captain_id = data.get('captain_id')
+    vc_id = data.get('vc_id')
+    impact_id = data.get('impact_id')
+
+    conn = get_conn()
+    user = conn.execute('SELECT roles_locked FROM users WHERE username = ?', (username,)).fetchone()
+    if user and user['roles_locked']:
+        conn.close()
+        return jsonify(error="Roles are locked for this week!"), 400
+
+    conn.execute('UPDATE users SET captain_id=?, vc_id=?, impact_id=?, roles_locked=1 WHERE username=?',
+                 (captain_id, vc_id, impact_id, username))
+    conn.commit()
+    conn.close()
+    return jsonify(success=True)
+
+
 # ── League endpoints (multi-league) ──────────────────────────────────────────
 
 @app.route('/api/leagues/create', methods=['POST'])
