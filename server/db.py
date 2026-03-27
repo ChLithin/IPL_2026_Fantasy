@@ -162,7 +162,24 @@ def init_db():
     has_settings = conn.execute('SELECT 1 FROM settings WHERE id = 1').fetchone()
     if not has_settings:
         conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
-        conn.commit()
+        
+    # --- MIGRATIONS ---
+    # Since 'CREATE TABLE IF NOT EXISTS' doesn't add new columns, we check and add them manually.
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN captain_id INTEGER")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN vc_id INTEGER")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN impact_id INTEGER")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN roles_locked INTEGER DEFAULT 0")
+    except: pass
+    # ------------------
+
+    conn.commit()
     if not admin:
         conn.execute('INSERT INTO users (username, is_admin) VALUES (?, ?)', ('admin', 1))
         conn.commit()
