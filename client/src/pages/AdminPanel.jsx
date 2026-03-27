@@ -209,7 +209,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
     } catch(e) { showErr(e.message); }
   };
 
-  const filteredPlayers = players.filter(p => !playerFilter || (p.name || '').toLowerCase().includes(playerFilter.toLowerCase()) || (p.team_abbr || '').toLowerCase().includes(playerFilter.toLowerCase()));
+  const filteredPlayers = (Array.isArray(players) ? players : []).filter(p => !playerFilter || (p.name || '').toLowerCase().includes(playerFilter.toLowerCase()) || (p.team_abbr || '').toLowerCase().includes(playerFilter.toLowerCase()));
 
   return (
     <div>
@@ -360,7 +360,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                 <tr><th>#</th><th>Player</th><th>Team</th><th>Role</th><th>Price</th><th>OVS</th><th>Actions</th></tr>
               </thead>
               <tbody>
-                {filteredPlayers.slice(0,100).map(p => (
+                {(Array.isArray(filteredPlayers) ? filteredPlayers : []).slice(0,100).map(p => (
                   <tr key={p.id}>
                     <td className="text-muted">{p.id}</td>
                     <td>
@@ -526,7 +526,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                 <div className="text-muted text-xs">Matches</div>
               </div>
               <div className="card text-center" style={{padding:12}}>
-                <div style={{fontSize:24,fontWeight:900}}>{players.filter(p=>p.overseas).length}</div>
+                <div style={{fontSize:24,fontWeight:900}}>{(Array.isArray(players) ? players : []).filter(p=>p.overseas).length}</div>
                 <div className="text-muted text-xs">Overseas</div>
               </div>
             </div>
