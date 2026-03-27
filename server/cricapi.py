@@ -400,15 +400,40 @@ def _auto_fetch_cycle(app):
 
 
 def _recalc_all(conn):
-    """Recalculate all user points (mirrors app.py logic)."""
-    from db import calc_points
-    users = conn.execute("SELECT username FROM users").fetchall()
+    """Recalculate all user points (mirrors app.py logic exactly)."""
+    users = conn.execute('SELECT username, captain_id, vc_id, impact_id FROM users').fetchall()
+    
+    # Get list of all match stats
+    all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
+    stats_dict = {} # (pid, mid) -> points
+    for s in all_stats:
+        stats_dict[(s['player_id'], s['match_id'])] = s['points']
+
+    # Get user squad members
+    all_user_players = conn.execute('SELECT * FROM user_teams').fetchall()
+    u_players = {} # username -> [ids]
+    for up in all_user_players:
+        if up['username'] not in u_players: u_players[up['username']] = []
+        u_players[up['username']].append(up['player_id'])
+
     for u in users:
-        username = u["username"]
-        row = conn.execute(
-            "SELECT COALESCE(SUM(ps.points), 0) as total FROM user_teams ut JOIN player_stats ps ON ps.player_id = ut.player_id WHERE ut.username = ?",
-            (username,)
-        ).fetchone()
-        total = row["total"] if row else 0
-        conn.execute("UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?", (total, total, username))
+        username = u['username']
+        total = 0
+        squad = u_players.get(username, [])
+        cap_id = u['captain_id']
+        vc_id = u['vc_id']
+        
+        # Iterate over all matches that are 'done'
+        done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
+        for m in done_matches:
+            mid = m['id']
+            # Score for all template players in the squad
+            for pid in squad:
+                pts = stats_dict.get((pid, mid), 0)
+                mul = 1.0
+                if pid == cap_id: mul = 2.0
+                elif pid == vc_id: mul = 1.5
+                total += pts * mul
+                
+        conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?', (total, total, username))
     conn.commit()
