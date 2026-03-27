@@ -249,7 +249,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                         <tr key={p.id}>
                           <td>
                             <div className="flex items-center gap-2">
-                              <img src={`/images/${p.image}`} style={{width:28,height:28,borderRadius:6,objectFit:"cover"}} onError={e=>e.target.style.display="none"} />
+                              <img src={`${BASE}/images/${p.image}`} style={{width:28,height:28,borderRadius:6,objectFit:"cover"}} onError={e=>e.target.style.display="none"} />
                               <span style={{fontWeight:600,fontSize:12}}>{p.name}</span>
                             </div>
                           </td>
@@ -365,7 +365,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                     <td className="text-muted">{p.id}</td>
                     <td>
                       <div className="flex items-center gap-2">
-                        <img src={`/images/${p.image}`} style={{width:24,height:24,borderRadius:4,objectFit:"cover"}} onError={e=>e.target.style.display="none"} />
+                        <img src={`${BASE}/images/${p.image}`} style={{width:24,height:24,borderRadius:4,objectFit:"cover"}} onError={e=>e.target.style.display="none"} />
                         <span style={{fontWeight:600,fontSize:12}}>{p.name}</span>
                       </div>
                     </td>

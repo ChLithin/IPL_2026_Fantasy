@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api';
+import { api, BASE } from '../api';
 
 const BUDGET = 100, MAX_SEL = 16, MAX_OVS = 5, MAX_PER_TEAM = 3;
 const ROLE_EMOJI = { BAT: '🏏', BOWL: '⚡', AR: '🌟', WK: '🥊' };
@@ -91,7 +91,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
           {selected.map((p, i) => (
             <div key={p.id} className="flex items-center gap-2" style={{padding:'6px 0',borderTop: i?'1px solid rgba(255,255,255,0.05)':'none'}}>
               <span className="text-muted text-xs" style={{width:20,textAlign:'right'}}>{i+1}</span>
-              <img src={`/images/${p.image}`} className="player-img" style={{width:32,height:32,borderRadius:8}} onError={e => e.target.style.display='none'} />
+              <img src={`${BASE}/images/${p.image}`} className="player-img" style={{width:32,height:32,borderRadius:8}} onError={e => e.target.style.display='none'} />
               <div className="flex-1 truncate">
                 <div style={{fontWeight:600,fontSize:12}}>{p.name}</div>
                 <div className="text-xs" style={{color: teamMeta[p.team_abbr]?.color}}>{p.team_abbr}</div>
@@ -167,7 +167,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
                   <div style={{position:'absolute',top:0,left:0,right:0,height:2,borderRadius:'16px 16px 0 0',background:teamMeta[activeTeam]?.color}} />
                   {isSel && <div style={{position:'absolute',top:6,right:6,width:18,height:18,borderRadius:9,background:teamMeta[activeTeam]?.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:900,color:'#000'}}>✓</div>}
                   {player.overseas ? <span className="badge badge-ovs" style={{position:'absolute',top:6,left:6}}>OVS</span> : null}
-                  <img src={`/images/${player.image}`} className="player-img" style={{width:48,height:48,margin:'8px auto 6px'}}
+                  <img src={`${BASE}/images/${player.image}`} className="player-img" style={{width:48,height:48,margin:'8px auto 6px'}}
                     onError={e => {e.target.style.display='none'}} />
                   <div style={{fontWeight:700,fontSize:11,marginTop:4}}>{player.name}</div>
                   <div className="text-xs" style={{color:teamMeta[activeTeam]?.color,marginTop:2}}>{player.team_abbr}</div>

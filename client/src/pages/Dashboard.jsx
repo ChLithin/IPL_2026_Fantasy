@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';
+import { api, BASE } from '../api';
 
 export function AdminDashboard({ user }) {
   const [groups, setGroups] = useState([]);
@@ -232,7 +232,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam }) {
                 return (
                   <div key={p.id} className="card" style={{padding:12,textAlign:'center',position:'relative'}}>
                     {i < 3 && <div style={{position:'absolute',top:8,left:8,fontSize:14}}>{['🥇','🥈','🥉'][i]}</div>}
-                    <img src={`/images/${p.image}`} className="player-img player-img-lg" style={{margin:'4px auto 6px',borderColor:tc+'60'}}
+                    <img src={`${BASE}/images/${p.image}`} className="player-img player-img-lg" style={{margin:'4px auto 6px',borderColor:tc+'60'}}
                       onError={e => e.target.style.display='none'} />
                     <div style={{position:'absolute',top:8,right:8,background:'#fbbf24',color:'#000',fontSize:10,fontWeight:900,borderRadius:12,padding:'2px 8px'}}>
                       {p.earned_points || 0}

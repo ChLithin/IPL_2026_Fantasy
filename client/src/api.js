@@ -1,4 +1,4 @@
-const BASE = 'https://lithinsaikumar.pythonanywhere.com';
+export const BASE = 'https://lithinsaikumar.pythonanywhere.com';
 
 async function request(url, options = {}) {
   console.log("Requesting: " + BASE + url);
