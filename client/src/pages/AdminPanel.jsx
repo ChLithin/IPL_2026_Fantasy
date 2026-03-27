@@ -31,11 +31,21 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
   // User edit
   const [editUser, setEditUser] = useState(null);
 
+  // CricAPI
+  const [cricConfig, setCricConfig] = useState({ cricapi_key: '', auto_fetch: 0, fetch_interval: 600 });
+  const [cricStatus, setCricStatus] = useState(null);
+  const [cricMatches, setCricMatches] = useState([]);
+  const [cricLoading, setCricLoading] = useState(false);
+  const [cricScorecard, setCricScorecard] = useState(null);
+  const [cricSelectedMatch, setCricSelectedMatch] = useState(null);
+  const [cricLocalMatchId, setCricLocalMatchId] = useState(null);
+
   useEffect(() => {
     loadMatches();
     loadUsers();
     loadSettings();
     loadGroups();
+    loadCricConfig();
   }, []);
 
   const loadSettings = async () => { try { setSettings(await api.getSettings()); } catch(e) {} };
@@ -211,6 +221,76 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
 
   const filteredPlayers = (Array.isArray(players) ? players : []).filter(p => !playerFilter || (p.name || '').toLowerCase().includes(playerFilter.toLowerCase()) || (p.team_abbr || '').toLowerCase().includes(playerFilter.toLowerCase()));
 
+  // CricAPI handlers
+  const loadCricConfig = async () => {
+    try { setCricConfig(await api.getCricApiConfig()); } catch(e) {}
+  };
+  const saveCricConfig = async () => {
+    try {
+      await api.updateCricApiConfig(cricConfig.cricapi_key, cricConfig.auto_fetch, cricConfig.fetch_interval);
+      showMsg("CricAPI config saved!");
+      loadCricStatus();
+    } catch(e) { showErr(e.message); }
+  };
+  const loadCricStatus = async () => {
+    try { setCricStatus(await api.getCricApiStatus()); } catch(e) { console.error(e); }
+  };
+  const fetchCricMatches = async () => {
+    setCricLoading(true);
+    try {
+      const m = await api.getCricApiMatches();
+      setCricMatches(m);
+      if (m.length === 0) showMsg("No matches found from CricAPI");
+    } catch(e) { showErr(e.message); }
+    setCricLoading(false);
+  };
+  const fetchScorecard = async (cricMatch) => {
+    setCricLoading(true);
+    setCricSelectedMatch(cricMatch);
+    try {
+      const result = await api.getCricApiScorecard(cricMatch.id, cricLocalMatchId);
+      setCricScorecard(result);
+      if (!result.matched?.length) showMsg("No players matched from scorecard");
+    } catch(e) { showErr(e.message); }
+    setCricLoading(false);
+  };
+  const importScorecard = async () => {
+    if (!cricScorecard?.matched?.length) return;
+    // Need a local match to import into
+    let matchId = cricLocalMatchId;
+    if (!matchId) {
+      // Auto-create the match from CricAPI data
+      const teams = cricSelectedMatch?.teams || [];
+      const t1 = teams[0]?.substring(0,4)?.toUpperCase() || '???';
+      const t2 = teams[1]?.substring(0,4)?.toUpperCase() || '???';
+      try {
+        const res = await api.createMatch(t1, t2, cricSelectedMatch?.date || '', cricSelectedMatch?.name || '');
+        matchId = res.id;
+      } catch(e) { showErr("Failed to create match: " + e.message); return; }
+    }
+    try {
+      await api.importCricApiStats(matchId, cricSelectedMatch?.id || '', cricScorecard.matched);
+      showMsg(`Imported ${cricScorecard.matched.length} player stats!`);
+      setCricScorecard(null);
+      setCricSelectedMatch(null);
+      setCricLocalMatchId(null);
+      loadMatches();
+      loadUsers();
+      loadCricStatus();
+    } catch(e) { showErr(e.message); }
+  };
+  const triggerAutoImport = async () => {
+    setCricLoading(true);
+    try {
+      const res = await api.triggerAutoImport();
+      showMsg(res.message || "Auto-import completed!");
+      loadMatches();
+      loadUsers();
+      loadCricStatus();
+    } catch(e) { showErr(e.message); }
+    setCricLoading(false);
+  };
+
   return (
     <div>
       <h2 style={{fontWeight:900,fontSize:24,marginBottom:16}}>⚙️ Admin Panel</h2>
@@ -222,6 +302,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
         <button className={`tab ${tab==="players"?"active":""}`} onClick={() => setTab("players")}>👤 Players</button>
         <button className={`tab ${tab==="users"?"active":""}`} onClick={() => setTab("users")}>👥 Users</button>
         <button className={`tab ${tab==="groups"?"active":""}`} onClick={() => setTab("groups")}>🛡️ Groups</button>
+        <button className={`tab ${tab==="cricapi"?"active":""}`} onClick={() => { setTab("cricapi"); loadCricStatus(); }}>🤖 CricAPI</button>
         <button className={`tab ${tab==="controls"?"active":""}`} onClick={() => setTab("controls")}>🎛️ Controls</button>
       </div>
 
@@ -296,6 +377,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                       Mark {m.status === 'upcoming' ? 'Done' : 'Upc'}
                     </button>
                     <button className="btn btn-sm btn-primary" onClick={() => openStats(m)}>📝 Stats</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => { setCricLocalMatchId(m.id); setTab('cricapi'); fetchCricMatches(); }} title="Fetch stats from CricAPI">🤖 Fetch</button>
                     <button className="btn btn-sm btn-danger" onClick={() => delMatch(m.id)}>🗑</button>
                   </div>
                 ))}
@@ -531,6 +613,165 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {tab === "cricapi" && (
+        <div style={{maxWidth:800, margin:'0 auto'}}>
+          {/* Config Section */}
+          <div className="card mb-3">
+            <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>🔑 CricAPI Configuration</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'end'}}>
+              <div>
+                <label className="text-xs text-muted">API Key</label>
+                <input className="input input-sm" type="password" value={cricConfig.cricapi_key}
+                  onChange={e => setCricConfig({...cricConfig, cricapi_key: e.target.value})}
+                  placeholder="Enter your CricAPI key..." />
+              </div>
+              <button className="btn btn-sm btn-primary" onClick={saveCricConfig}>💾 Save</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:12}}>
+              <div>
+                <label className="text-xs text-muted">Auto-Fetch</label>
+                <select className="input input-sm" value={cricConfig.auto_fetch}
+                  onChange={e => setCricConfig({...cricConfig, auto_fetch: parseInt(e.target.value)})}>
+                  <option value={0}>Disabled</option>
+                  <option value={1}>Enabled</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted">Fetch Interval (seconds)</label>
+                <input className="input input-sm" type="number" min="60" step="60" value={cricConfig.fetch_interval}
+                  onChange={e => setCricConfig({...cricConfig, fetch_interval: parseInt(e.target.value) || 300})} />
+              </div>
+            </div>
+          </div>
+
+          {/* Status Section */}
+          {cricStatus && (
+            <div className="card mb-3" style={{borderColor: cricStatus.auto_fetch_running ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.1)'}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📡 Status</div>
+              <div className="grid-3 gap-2">
+                <div className="card text-center" style={{padding:8}}>
+                  <div style={{fontSize:16,fontWeight:900,color: cricStatus.configured ? '#34d399' : '#ef4444'}}>
+                    {cricStatus.configured ? '✓' : '✗'}
+                  </div>
+                  <div className="text-muted text-xs">API Key</div>
+                </div>
+                <div className="card text-center" style={{padding:8}}>
+                  <div style={{fontSize:16,fontWeight:900,color: cricStatus.auto_fetch_running ? '#34d399' : '#94a3b8'}}>
+                    {cricStatus.auto_fetch_running ? '● Active' : '○ Off'}
+                  </div>
+                  <div className="text-muted text-xs">Auto-Fetch</div>
+                </div>
+                <div className="card text-center" style={{padding:8}}>
+                  <div style={{fontSize:16,fontWeight:900,color:'#fbbf24'}}>{cricStatus.matches_imported}</div>
+                  <div className="text-muted text-xs">Imported</div>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button className="btn btn-sm btn-primary" onClick={triggerAutoImport}>
+                  ⚡ Run Import Now
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={fetchCricMatches}>
+                  🔄 Fetch Live Matches
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={loadCricStatus}>
+                  📡 Refresh Status
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Scorecard Review (if fetching for a specific match) */}
+          {cricScorecard && (
+            <div className="card mb-3" style={{borderColor:'rgba(249,205,27,0.3)'}}>
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <div style={{fontWeight:700,fontSize:14}}>📋 Scorecard Review</div>
+                  <div className="text-xs text-muted">
+                    {cricScorecard.matched?.length || 0} matched, {cricScorecard.unmatched?.length || 0} unmatched
+                    {cricLocalMatchId && <span> · Local Match #{cricLocalMatchId}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button className="btn btn-sm btn-primary" onClick={importScorecard} disabled={!cricScorecard.matched?.length}>
+                    ✅ Import {cricScorecard.matched?.length || 0} Stats
+                  </button>
+                  <button className="btn btn-sm btn-secondary" onClick={() => { setCricScorecard(null); setCricSelectedMatch(null); }}>✕ Close</button>
+                </div>
+              </div>
+
+              {cricScorecard.matched?.length > 0 && (
+                <div className="table-wrap mb-2">
+                  <table>
+                    <thead>
+                      <tr><th>Player (DB)</th><th>API Name</th><th>Runs</th><th>Wkts</th><th>Catches</th><th>Pts</th><th>Conf</th></tr>
+                    </thead>
+                    <tbody>
+                      {cricScorecard.matched.map(s => (
+                        <tr key={s.player_id}>
+                          <td style={{fontWeight:600,fontSize:12}}>{s.db_name}</td>
+                          <td className="text-muted" style={{fontSize:11}}>{s.api_name}</td>
+                          <td style={{fontWeight:700}}>{s.runs}</td>
+                          <td style={{fontWeight:700}}>{s.wickets}</td>
+                          <td style={{fontWeight:700}}>{s.catches}</td>
+                          <td style={{fontWeight:700,color:'#fbbf24'}}>{s.runs + s.wickets*25 + s.catches*8}</td>
+                          <td>
+                            <span style={{color: s.confidence >= 0.9 ? '#34d399' : s.confidence >= 0.7 ? '#fbbf24' : '#ef4444', fontWeight:700, fontSize:11}}>
+                              {Math.round(s.confidence * 100)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {cricScorecard.unmatched?.length > 0 && (
+                <div>
+                  <div className="text-xs text-muted font-bold mb-1" style={{letterSpacing:1,textTransform:'uppercase',color:'#ef4444'}}>⚠ Unmatched Players</div>
+                  <div className="flex flex-wrap gap-1">
+                    {cricScorecard.unmatched.map((u, i) => (
+                      <span key={i} className="badge" style={{borderColor:'rgba(239,68,68,0.3)',color:'#ef4444',fontSize:9}}>
+                        {u.api_name} ({u.runs}r/{u.wickets}w/{u.catches}c)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CricAPI Live Matches */}
+          {cricMatches.length > 0 && (
+            <div className="card">
+              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>
+                🌐 CricAPI Matches ({cricMatches.length})
+                {cricLocalMatchId && <span className="text-xs text-muted" style={{marginLeft:8}}>Selecting for Local Match #{cricLocalMatchId}</span>}
+              </div>
+              {cricMatches.map(m => (
+                <div key={m.id} className="flex items-center gap-3" style={{padding:'8px 0',borderTop:'1px solid rgba(255,255,255,0.05)'}}>
+                  <div className="flex-1">
+                    <div style={{fontWeight:600,fontSize:12}}>{m.name?.substring(0, 60)}</div>
+                    <div className="flex gap-2 mt-1">
+                      <span className="text-xs text-muted">{m.date}</span>
+                      <span className={`badge ${m.completed ? 'badge-ovs' : 'badge-wk'}`} style={{fontSize:8}}>
+                        {m.completed ? 'DONE' : m.status?.substring(0, 20) || 'LIVE'}
+                      </span>
+                      {m.fantasyEnabled && <span className="badge badge-ar" style={{fontSize:8}}>FANTASY</span>}
+                    </div>
+                  </div>
+                  <button className="btn btn-sm btn-primary" onClick={() => fetchScorecard(m)} disabled={cricLoading}>
+                    📊 Fetch Stats
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {cricLoading && <div className="spinner" />}
         </div>
       )}
     </div>

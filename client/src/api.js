@@ -66,3 +66,16 @@ export const api = {
 // Additional method for deleting groups
 api.deleteGroup = (code) =>
   request(`/api/groups/${code}`, { method: 'DELETE' });
+
+// CricAPI integration
+api.getCricApiConfig = () => request('/api/admin/cricapi/config');
+api.updateCricApiConfig = (cricapi_key, auto_fetch, fetch_interval) =>
+  request('/api/admin/cricapi/config', { method: 'POST', body: JSON.stringify({ cricapi_key, auto_fetch, fetch_interval }) });
+api.getCricApiMatches = () => request('/api/admin/cricapi/matches');
+api.getCricApiScorecard = (cricapiMatchId, localMatchId) =>
+  request(`/api/admin/cricapi/scorecard/${cricapiMatchId}${localMatchId ? '?local_match_id=' + localMatchId : ''}`);
+api.importCricApiStats = (match_id, cricapi_match_id, stats) =>
+  request('/api/admin/cricapi/import', { method: 'POST', body: JSON.stringify({ match_id, cricapi_match_id, stats }) });
+api.triggerAutoImport = () => request('/api/admin/cricapi/auto-import', { method: 'POST' });
+api.getCricApiStatus = () => request('/api/admin/cricapi/status');
+

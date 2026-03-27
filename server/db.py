@@ -108,7 +108,10 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY,
-            allow_team_edit BOOLEAN DEFAULT 0
+            allow_team_edit BOOLEAN DEFAULT 0,
+            cricapi_key TEXT DEFAULT '',
+            auto_fetch INTEGER DEFAULT 0,
+            fetch_interval INTEGER DEFAULT 600
         );
         CREATE TABLE IF NOT EXISTS user_teams (
             username TEXT NOT NULL,
@@ -128,7 +131,8 @@ def init_db():
             team2 TEXT NOT NULL,
             date TEXT DEFAULT '',
             description TEXT DEFAULT '',
-            status TEXT DEFAULT 'upcoming'
+            status TEXT DEFAULT 'upcoming',
+            cricapi_match_id TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS player_stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +159,25 @@ def init_db():
     if not admin:
         conn.execute('INSERT INTO users (username, is_admin) VALUES (?, ?)', ('admin', 1))
         conn.commit()
+    # Migrate: add CricAPI columns if missing
+    _migrate_cricapi_columns(conn)
     conn.close()
+
+def _migrate_cricapi_columns(conn):
+    """Add CricAPI-related columns to existing tables if they don't exist."""
+    # Settings table: cricapi_key, auto_fetch, fetch_interval
+    cols = [row[1] for row in conn.execute('PRAGMA table_info(settings)').fetchall()]
+    if 'cricapi_key' not in cols:
+        conn.execute("ALTER TABLE settings ADD COLUMN cricapi_key TEXT DEFAULT ''")
+    if 'auto_fetch' not in cols:
+        conn.execute('ALTER TABLE settings ADD COLUMN auto_fetch INTEGER DEFAULT 0')
+    if 'fetch_interval' not in cols:
+        conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
+    # Matches table: cricapi_match_id
+    cols2 = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
+    if 'cricapi_match_id' not in cols2:
+        conn.execute("ALTER TABLE matches ADD COLUMN cricapi_match_id TEXT DEFAULT ''")
+    conn.commit()
 
 def seed_players(conn):
     if not os.path.exists(CSV_PATH):

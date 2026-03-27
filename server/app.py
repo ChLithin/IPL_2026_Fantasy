@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import uuid
 from db import get_conn, init_db, calc_points
+import cricapi
 
 app = Flask(__name__)
 CORS(app)
@@ -259,11 +260,11 @@ def handle_settings():
         conn.commit()
         conn.close()
         return jsonify(success=True)
-    row = conn.execute('SELECT allow_team_edit FROM settings WHERE id=1').fetchone()
+    row = conn.execute('SELECT allow_team_edit, auto_fetch, fetch_interval FROM settings WHERE id=1').fetchone()
     conn.close()
     if row:
         return jsonify(dict(row))
-    return jsonify(allow_team_edit=0)
+    return jsonify(allow_team_edit=0, auto_fetch=0, fetch_interval=600)
 
 # ── Public: Matches ───────────────────────────────────────────────────────────
 
@@ -438,6 +439,163 @@ def delete_group(grp_code):
     return jsonify(ok=True)
 
 
+# ── CricAPI Integration ──────────────────────────────────────────────────────
+
+@app.route('/api/admin/cricapi/config', methods=['GET', 'POST'])
+def cricapi_config():
+    conn = get_conn()
+    if request.method == 'POST':
+        data = request.json
+        apikey = data.get('cricapi_key', '').strip()
+        auto_fetch = int(data.get('auto_fetch', 0))
+        interval = int(data.get('fetch_interval', 600))
+        conn.execute(
+            'UPDATE settings SET cricapi_key = ?, auto_fetch = ?, fetch_interval = ? WHERE id = 1',
+            (apikey, auto_fetch, interval)
+        )
+        conn.commit()
+        conn.close()
+        # Restart auto-fetch if enabled
+        if auto_fetch and apikey:
+            cricapi.start_auto_fetch(app, interval)
+        else:
+            cricapi.stop_auto_fetch()
+        return jsonify(success=True)
+    row = conn.execute('SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1').fetchone()
+    conn.close()
+    if row:
+        return jsonify(dict(row))
+    return jsonify(cricapi_key='', auto_fetch=0, fetch_interval=600)
+
+
+@app.route('/api/admin/cricapi/matches', methods=['GET'])
+def cricapi_matches():
+    """Fetch current/recent matches from CricAPI, filtered to IPL."""
+    conn = get_conn()
+    row = conn.execute('SELECT cricapi_key FROM settings WHERE id = 1').fetchone()
+    conn.close()
+    apikey = row['cricapi_key'] if row and row['cricapi_key'] else ''
+    if not apikey:
+        return jsonify(error='CricAPI key not configured'), 400
+    try:
+        all_matches = cricapi.fetch_current_matches(apikey)
+        ipl = cricapi.filter_ipl_matches(all_matches)
+        # Return all if no IPL matches found (for testing)
+        result = ipl if ipl else all_matches
+        return jsonify([{
+            'id': m.get('id', ''),
+            'name': m.get('name', ''),
+            'teams': m.get('teams', []),
+            'status': m.get('status', ''),
+            'date': m.get('date', m.get('dateTimeGMT', ''))[:10],
+            'matchType': m.get('matchType', ''),
+            'completed': cricapi.is_match_completed(m),
+            'fantasyEnabled': m.get('fantasyEnabled', False),
+        } for m in result])
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/api/admin/cricapi/scorecard/<cricapi_match_id>', methods=['GET'])
+def cricapi_scorecard(cricapi_match_id):
+    """Fetch scorecard and fuzzy-match players to our DB."""
+    local_match_id = request.args.get('local_match_id', type=int)
+    conn = get_conn()
+    row = conn.execute('SELECT cricapi_key FROM settings WHERE id = 1').fetchone()
+    apikey = row['cricapi_key'] if row and row['cricapi_key'] else ''
+    if not apikey:
+        conn.close()
+        return jsonify(error='CricAPI key not configured'), 400
+    try:
+        scorecard_data = cricapi.fetch_scorecard(apikey, cricapi_match_id)
+        raw_stats = cricapi.extract_player_stats(scorecard_data)
+        
+        # If local_match_id provided, get only players from those teams
+        if local_match_id:
+            match = conn.execute('SELECT * FROM matches WHERE id = ?', (local_match_id,)).fetchone()
+            if match:
+                db_players = [dict(p) for p in conn.execute(
+                    'SELECT * FROM players WHERE team_abbr IN (?, ?)',
+                    (match['team1'], match['team2'])
+                ).fetchall()]
+            else:
+                db_players = [dict(p) for p in conn.execute('SELECT * FROM players').fetchall()]
+        else:
+            db_players = [dict(p) for p in conn.execute('SELECT * FROM players').fetchall()]
+        
+        conn.close()
+        result = cricapi.match_players_to_db(raw_stats, db_players)
+        return jsonify(result)
+    except Exception as e:
+        conn.close()
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/api/admin/cricapi/import', methods=['POST'])
+def cricapi_import():
+    """Import reviewed stats from CricAPI into our database."""
+    data = request.json
+    match_id = data.get('match_id')
+    cricapi_match_id = data.get('cricapi_match_id', '')
+    stats_list = data.get('stats', [])
+    if not match_id or not stats_list:
+        return jsonify(error='match_id and stats required'), 400
+    
+    conn = get_conn()
+    # Link CricAPI match ID to our match
+    if cricapi_match_id:
+        conn.execute('UPDATE matches SET cricapi_match_id = ? WHERE id = ?', (cricapi_match_id, match_id))
+    
+    for s in stats_list:
+        pid = s['player_id']
+        runs = int(s.get('runs', 0))
+        wickets = int(s.get('wickets', 0))
+        catches = int(s.get('catches', 0))
+        points = calc_points(runs, wickets, catches)
+        conn.execute(
+            '''INSERT INTO player_stats (player_id, match_id, runs, wickets, catches, points)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(player_id, match_id) DO UPDATE SET
+               runs = ?, wickets = ?, catches = ?, points = ?''',
+            (pid, match_id, runs, wickets, catches, points,
+             runs, wickets, catches, points)
+        )
+    conn.commit()
+    conn.execute('UPDATE matches SET status = ? WHERE id = ?', ('done', match_id))
+    _recalculate_user_points(conn)
+    conn.close()
+    return jsonify(ok=True)
+
+
+@app.route('/api/admin/cricapi/auto-import', methods=['POST'])
+def cricapi_auto_import():
+    """Manually trigger one auto-import cycle (useful for testing)."""
+    try:
+        cricapi._auto_fetch_cycle(app)
+        return jsonify(ok=True, message='Auto-import cycle completed')
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/api/admin/cricapi/status', methods=['GET'])
+def cricapi_status():
+    """Get the current status of CricAPI integration."""
+    conn = get_conn()
+    row = conn.execute('SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1').fetchone()
+    imported = conn.execute(
+        "SELECT COUNT(*) as cnt FROM matches WHERE cricapi_match_id != '' AND cricapi_match_id IS NOT NULL"
+    ).fetchone()
+    conn.close()
+    is_running = cricapi._auto_fetch_thread is not None and cricapi._auto_fetch_thread.is_alive()
+    return jsonify(
+        configured=bool(row and row['cricapi_key']),
+        auto_fetch_enabled=bool(row and row['auto_fetch']),
+        auto_fetch_running=is_running,
+        fetch_interval=row['fetch_interval'] if row else 600,
+        matches_imported=imported['cnt'] if imported else 0,
+    )
+
+
 # ── Serve Frontend ────────────────────────────────────────────────────────────
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -453,7 +611,12 @@ def serve(path):
 
 if __name__ == '__main__':
     init_db()
+    # Start CricAPI auto-fetch if configured
+    conn = get_conn()
+    row = conn.execute('SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1').fetchone()
+    if row and row['cricapi_key'] and row['auto_fetch']:
+        cricapi.start_auto_fetch(app, row['fetch_interval'])
+        print(f"CricAPI auto-fetch started (interval: {row['fetch_interval']}s)")
+    conn.close()
     print("Server starting on http://localhost:5555")
     app.run(debug=True, port=5555)
-
-
