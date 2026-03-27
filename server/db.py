@@ -104,7 +104,11 @@ def init_db():
             group_id TEXT DEFAULT NULL,
             total_points INTEGER DEFAULT 0,
             weekly_points INTEGER DEFAULT 0,
-            is_admin INTEGER DEFAULT 0
+            is_admin INTEGER DEFAULT 0,
+            captain_id INTEGER,
+            vc_id INTEGER,
+            impact_id INTEGER,
+            roles_locked INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY,
@@ -166,6 +170,23 @@ def init_db():
     
     
 
+
+    
+    # --- ROBUST MIGRATIONS ---
+    cursor = conn.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cursor.fetchall()]
+    needed = [
+        ("captain_id", "INTEGER"),
+        ("vc_id", "INTEGER"),
+        ("impact_id", "INTEGER"),
+        ("roles_locked", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_type in needed:
+        if col_name not in columns:
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+            except: pass
+    # --------------------------
 
     conn.commit()
     if not admin:
