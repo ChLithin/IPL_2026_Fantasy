@@ -144,15 +144,32 @@ def save_team():
     total_price = sum(p['price'] for p in players)
     overseas_count = sum(1 for p in players if p['overseas'])
     team_counts = {}
+    roles = {}
     for p in players:
         team_counts[p['team_abbr']] = team_counts.get(p['team_abbr'], 0) + 1
+        roles[p['role']] = roles.get(p['role'], 0) + 1
+        
+    wk_count = roles.get('WK', 0)
+    bat_count = roles.get('BAT', 0) + wk_count
+    ar_count = roles.get('AR', 0)
+    bowl_count = roles.get('BOWL', 0)
+
     errors = []
-    if len(players) > 12:
-        errors.append("Max 16 players")
+    if len(players) != 12:
+        errors.append(f"Exactly 12 players required, got {len(players)}")
     if total_price > 100:
         errors.append(f"Budget exceeded: {total_price} Cr")
     if overseas_count > 4:
-        errors.append(f"Max 5 overseas, got {overseas_count}")
+        errors.append(f"Max 4 overseas, got {overseas_count}")
+    if wk_count < 1:
+        errors.append("Min 1 Wicket Keeper required")
+    if bat_count < 3 or bat_count > 6:
+        errors.append("Batsmen (+WK) must be between 3 and 6")
+    if ar_count < 1 or ar_count > 5:
+        errors.append("All-rounders must be between 1 and 5")
+    if bowl_count < 3 or bowl_count > 6:
+        errors.append("Bowlers must be between 3 and 6")
+        
     for t, c in team_counts.items():
         if c > 3:
             errors.append(f"Max 3 from {t}, got {c}")

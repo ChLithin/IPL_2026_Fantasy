@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, BASE } from '../api';
 
-const BUDGET = 100, 12 = 12, 4 = 4, MAX_PER_TEAM = 3;
+const BUDGET = 100, MAX_PLAYERS = 12, MAX_OVERSEAS = 4, MAX_PER_TEAM = 3;
 const ROLE_EMOJI = { BAT: '🏏', BOWL: '⚡', AR: '🌟', WK: '🥊' };
 
 function getViolation(selected, player, isEditMode, initialTeamIds) {
@@ -11,12 +11,12 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
     if (buys >= 2) return 'Max 2 transfers limit';
   }
   if (selected.some(p => p.id === player.id)) return null;
-  if (selected.length >= 12) return 'Squad full (12 players)';
+  if (selected.length >= MAX_PLAYERS) return `Squad full (${MAX_PLAYERS} players)`;
   
   const spent = selected.reduce((s, p) => s + p.price, 0);
-  if (spent + player.price > 120) return 'Budget exceeded (₹120Cr)';
+  if (spent + player.price > BUDGET) return `Budget exceeded (₹${BUDGET}Cr)`;
   
-  if (player.overseas && selected.filter(p => p.overseas).length >= 4) return 'Max 4 overseas';
+  if (player.overseas && selected.filter(p => p.overseas).length >= MAX_OVERSEAS) return `Max ${MAX_OVERSEAS} overseas`;
   
   // Role constraints for the incoming player
   const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
@@ -26,7 +26,7 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
   const bowlCount = (roles['BOWL'] || 0) + (player.role === 'BOWL' ? 1 : 0);
   
   if (batCount > 6 && (player.role === 'BAT' || player.role === 'WK')) return 'Max 6 Batsmen (+WK)';
-  if (arCount > 6 && player.role === 'AR') return 'Max 6 All-rounders';
+  if (arCount > 5 && player.role === 'AR') return 'Max 5 All-rounders';
   if (bowlCount > 6 && player.role === 'BOWL') return 'Max 6 Bowlers';
   
   return null;
@@ -35,7 +35,7 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
 export default function TeamBuilder({ user, players, onSave, teamMeta }) {
     const initialTeamIds = user.team ? user.team.map(p => typeof p === 'object' ? p.id : p) : [];
   const initialTeam = initialTeamIds.map(id => (Array.isArray(players) ? players : []).find(p => p.id === id)).filter(Boolean);
-  const isEditMode = initialTeam.length === 12;
+  const isEditMode = initialTeam.length === MAX_PLAYERS;
   const [selected, setSelected] = useState(initialTeam);
   const [activeTeam, setActiveTeam] = useState('CSK');
   const [search, setSearch] = useState('');
@@ -66,10 +66,10 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
     const bowlCount = roles['BOWL'] || 0;
     const wkCount = roles['WK'] || 0;
 
-    if (selected.length !== 12) { setErr("Squad must have exactly 12 players"); return; }
+    if (selected.length !== MAX_PLAYERS) { setErr(`Squad must have exactly ${MAX_PLAYERS} players`); return; }
     if (wkCount < 1) { setErr("Min 1 Wicket Keeper required"); return; }
     if (batCount < 3) { setErr("Min 3 Batsmen (+WK) required"); return; }
-    if (arCount < 3) { setErr("Min 3 All-rounders required"); return; }
+    if (arCount < 1) { setErr("Min 1 All-rounder required"); return; }
     if (bowlCount < 3) { setErr("Min 3 Bowlers required"); return; }
     if (selected.filter(p => p.overseas).length > 4) { setErr("Max 4 Overseas allowed"); return; }
 
@@ -93,7 +93,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
           <h2 style={{fontSize:28,fontWeight:900}}>{user.username}'s Team</h2>
         </div>
         <div className="grid-3 mb-3">
-          {[['👥', `${selected.length}/${12}`, 'Players'],['💰', `₹${remaining.toFixed(1)}Cr`, 'Budget Left'],['✈️', `${ovs}/${4}`, 'Overseas']].map(([ic,val,lbl]) => (
+          {[['👥', `${selected.length}/${MAX_PLAYERS}`, 'Players'],['💰', `₹${remaining.toFixed(1)}Cr`, 'Budget Left'],['✈️', `${ovs}/${MAX_OVERSEAS}`, 'Overseas']].map(([ic,val,lbl]) => (
             <div key={lbl} className="card text-center">
               <div style={{fontSize:20}}>{ic}</div>
               <div style={{fontWeight:900,fontSize:14}}>{val}</div>
@@ -145,7 +145,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
           onChange={e => setSearch(e.target.value)} placeholder="Search player…" />
         <div className="flex-1" />
         <span style={{color:'#fbbf24',fontWeight:900,fontSize:14}}>₹{remaining.toFixed(1)}Cr</span>
-        <span className="text-muted text-xs">{selected.length}/{12}</span>
+        <span className="text-muted text-xs">{selected.length}/{MAX_PLAYERS}</span>
       </div>
 
       {/* Team tabs */}
@@ -230,11 +230,11 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
             </div>
             <div className="grid-2 mb-2">
               <div className="card text-center" style={{padding:8}}>
-                <div style={{fontWeight:900,fontSize:14}}>{selected.length}<span className="text-muted text-xs">/{12}</span></div>
+                <div style={{fontWeight:900,fontSize:14}}>{selected.length}<span className="text-muted text-xs">/{MAX_PLAYERS}</span></div>
                 <div className="text-muted text-xs">Players</div>
               </div>
               <div className="card text-center" style={{padding:8}}>
-                <div style={{fontWeight:900,fontSize:14,color:'#818cf8'}}>{ovs}<span className="text-muted text-xs">/{4}</span></div>
+                <div style={{fontWeight:900,fontSize:14,color:'#818cf8'}}>{ovs}<span className="text-muted text-xs">/{MAX_OVERSEAS}</span></div>
                 <div className="text-muted text-xs">Overseas</div>
               </div>
             </div>
@@ -250,8 +250,8 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
               </div>
             )}
             <button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}}
-              disabled={selected.length !== 16} onClick={() => setShowReview(true)}>
-              {selected.length === 12 ? 'Review Team 🏏' : `Need ${12-selected.length} more`}
+              disabled={selected.length !== MAX_PLAYERS} onClick={() => setShowReview(true)}>
+              {selected.length === MAX_PLAYERS ? 'Review Team 🏏' : `Need ${MAX_PLAYERS-selected.length} more`}
             </button>
           </div>
         </div>
