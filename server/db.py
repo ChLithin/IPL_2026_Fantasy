@@ -147,6 +147,11 @@ def init_db():
     if count == 0:
         seed_players(conn)
     admin = conn.execute('SELECT * FROM users WHERE username = ?', ('admin',)).fetchone()
+        # Ensure settings row exists
+    has_settings = conn.execute('SELECT 1 FROM settings WHERE id = 1').fetchone()
+    if not has_settings:
+        conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
+        conn.commit()
     if not admin:
         conn.execute('INSERT INTO users (username, is_admin) VALUES (?, ?)', ('admin', 1))
         conn.commit()

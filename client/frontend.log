@@ -145,3 +145,4 @@ Error: connect ECONNREFUSED 127.0.0.1:5555
 1:52:58 PM [vite] (client) hmr update /src/App.jsx, /src/pages/LoginPage.jsx, /src/pages/Dashboard.jsx, /src/pages/TeamBuilder.jsx, /src/pages/AdminPanel.jsx, /src/pages/GroupPage.jsx
 1:52:58 PM [vite] (client) hmr update /src/pages/Dashboard.jsx
 1:52:58 PM [vite] (client) hmr update /src/pages/TeamBuilder.jsx
+2:43:16 PM [vite] (client) hmr update /src/pages/AdminPanel.jsx

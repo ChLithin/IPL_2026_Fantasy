@@ -209,7 +209,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
     } catch(e) { showErr(e.message); }
   };
 
-  const filteredPlayers = players.filter(p => !playerFilter || p.name.toLowerCase().includes(playerFilter.toLowerCase()) || p.team_abbr.toLowerCase().includes(playerFilter.toLowerCase()));
+  const filteredPlayers = players.filter(p => !playerFilter || (p.name || '').toLowerCase().includes(playerFilter.toLowerCase()) || (p.team_abbr || '').toLowerCase().includes(playerFilter.toLowerCase()));
 
   return (
     <div>
@@ -242,7 +242,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                     <tr><th>Player</th><th>Team</th><th style={{width:80}}>Runs</th><th style={{width:80}}>Wickets</th><th style={{width:80}}>Catches</th><th style={{width:60}}>Pts</th></tr>
                   </thead>
                   <tbody>
-                    {matchPlayers.filter(p => !statFilter || p.name.toLowerCase().includes(statFilter.toLowerCase()) || p.team_abbr.toLowerCase().includes(statFilter.toLowerCase())).map(p => {
+                    {matchPlayers.filter(p => !statFilter || (p.name || '').toLowerCase().includes(statFilter.toLowerCase()) || (p.team_abbr || '').toLowerCase().includes(statFilter.toLowerCase())).map(p => {
                       const s = statsMap[p.id] || {runs:0,wickets:0,catches:0};
                       const pts = s.runs + s.wickets * 25 + s.catches * 8;
                       return (
