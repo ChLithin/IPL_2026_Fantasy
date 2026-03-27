@@ -70,6 +70,17 @@ export const api = {
 api.deleteGroup = (code) =>
   request(`/api/groups/${code}`, { method: 'DELETE' });
 
+// League system (multi-league)
+api.createLeague = (username, name) =>
+  request('/api/league', { method: 'POST', body: JSON.stringify({ username, name }) });
+api.joinLeague = (username, code) =>
+  request('/api/league/join', { method: 'POST', body: JSON.stringify({ username, code }) });
+api.leaveLeague = (username, code) =>
+  request(`/api/league/${code}/leave`, { method: 'POST', body: JSON.stringify({ username }) });
+api.getLeagueLeaderboard = (code) => request(`/api/league/${code}/leaderboard`);
+api.getMyLeagues = (username) => request(`/api/user/${username}/leagues`);
+api.getUserTeamPublic = (username) => request(`/api/user/${username}/team-public`);
+
 // CricAPI integration
 api.getCricApiConfig = () => request('/api/admin/cricapi/config');
 api.updateCricApiConfig = (cricapi_key, auto_fetch, fetch_interval) =>

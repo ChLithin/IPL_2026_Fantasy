@@ -129,6 +129,13 @@ def init_db():
             name TEXT NOT NULL,
             created_by TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS league_members (
+            username TEXT NOT NULL,
+            league_code TEXT NOT NULL,
+            PRIMARY KEY (username, league_code),
+            FOREIGN KEY (username) REFERENCES users(username),
+            FOREIGN KEY (league_code) REFERENCES groups_(code)
+        );
         CREATE TABLE IF NOT EXISTS matches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             team1 TEXT NOT NULL,
@@ -198,6 +205,8 @@ def init_db():
         conn.commit()
     # Migrate: add CricAPI columns if missing
     _migrate_cricapi_columns(conn)
+    # Migrate: populate league_members from old group_id
+    _migrate_league_members(conn)
     conn.close()
 
 def _migrate_cricapi_columns(conn):
@@ -214,6 +223,26 @@ def _migrate_cricapi_columns(conn):
     cols2 = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
     if 'cricapi_match_id' not in cols2:
         conn.execute("ALTER TABLE matches ADD COLUMN cricapi_match_id TEXT DEFAULT ''")
+    conn.commit()
+
+def _migrate_league_members(conn):
+    """Migrate existing users.group_id into league_members table."""
+    users_with_groups = conn.execute(
+        "SELECT username, group_id FROM users WHERE group_id IS NOT NULL AND group_id != ''"
+    ).fetchall()
+    for u in users_with_groups:
+        existing = conn.execute(
+            'SELECT 1 FROM league_members WHERE username = ? AND league_code = ?',
+            (u['username'], u['group_id'])
+        ).fetchone()
+        if not existing:
+            try:
+                conn.execute(
+                    'INSERT INTO league_members (username, league_code) VALUES (?, ?)',
+                    (u['username'], u['group_id'])
+                )
+            except:
+                pass
     conn.commit()
 
 def seed_players(conn):

@@ -210,6 +210,7 @@ def create_group():
     conn = get_conn()
     conn.execute('INSERT INTO groups_ (code, name, created_by) VALUES (?, ?, ?)', (code, name, username))
     conn.execute('UPDATE users SET group_id = ? WHERE username = ?', (code, username))
+    conn.execute('INSERT OR IGNORE INTO league_members (username, league_code) VALUES (?, ?)', (username, code))
     conn.commit()
     conn.close()
     return jsonify(code=code, name=name)
@@ -231,6 +232,7 @@ def join_group():
         conn.close()
         return jsonify(error="Group not found"), 404
     conn.execute('UPDATE users SET group_id = ? WHERE username = ?', (code, username))
+    conn.execute('INSERT OR IGNORE INTO league_members (username, league_code) VALUES (?, ?)', (username, code))
     conn.commit()
     conn.close()
     return jsonify(code=code, name=group['name'])
@@ -238,7 +240,13 @@ def join_group():
 @app.route('/api/group/<code>/leaderboard')
 def group_leaderboard(code):
     conn = get_conn()
-    users = conn.execute('SELECT username, total_points, weekly_points FROM users WHERE group_id = ? ORDER BY weekly_points DESC, total_points DESC', (code,)).fetchall()
+    users = conn.execute('''
+        SELECT u.username, u.total_points, u.weekly_points
+        FROM league_members lm
+        JOIN users u ON lm.username = u.username
+        WHERE lm.league_code = ?
+        ORDER BY u.total_points DESC, u.weekly_points DESC
+    ''', (code,)).fetchall()
     conn.close()
     result = []
     for i, u in enumerate(users):
@@ -265,6 +273,7 @@ def kick_group_member(grp_code):
     username = data.get('username')
     conn = get_conn()
     conn.execute('UPDATE users SET group_id = NULL WHERE username = ? AND group_id = ?', (username, grp_code))
+    conn.execute('DELETE FROM league_members WHERE username = ? AND league_code = ?', (username, grp_code))
     conn.commit()
     conn.close()
     return jsonify(success=True)
@@ -473,6 +482,7 @@ def admin_update_user(username):
 def admin_delete_user(username):
     conn = get_conn()
     conn.execute('DELETE FROM user_teams WHERE username = ?', (username,))
+    conn.execute('DELETE FROM league_members WHERE username = ?', (username,))
     conn.execute('DELETE FROM users WHERE username = ?', (username,))
     conn.commit()
     conn.close()
@@ -499,10 +509,146 @@ def delete_match(mid):
 def delete_group(grp_code):
     conn = get_conn()
     conn.execute('UPDATE users SET group_id = NULL WHERE group_id = ?', (grp_code,))
+    conn.execute('DELETE FROM league_members WHERE league_code = ?', (grp_code,))
     conn.execute('DELETE FROM groups_ WHERE code = ?', (grp_code,))
     conn.commit()
     conn.close()
     return jsonify(ok=True)
+
+
+# ── League endpoints (multi-league) ──────────────────────────────────────────
+
+@app.route('/api/league', methods=['POST'])
+def create_league():
+    data = request.json
+    name = data.get('name', '').strip()
+    username = data.get('username', '').strip()
+    if not name or not username:
+        return jsonify(error="League name and username required"), 400
+    code = uuid.uuid4().hex[:8].upper()
+    conn = get_conn()
+    conn.execute('INSERT INTO groups_ (code, name, created_by) VALUES (?, ?, ?)', (code, name, username))
+    conn.execute('INSERT OR IGNORE INTO league_members (username, league_code) VALUES (?, ?)', (username, code))
+    conn.commit()
+    conn.close()
+    return jsonify(code=code, name=name)
+
+@app.route('/api/league/join', methods=['POST'])
+def join_league():
+    data = request.json
+    code = data.get('code', '').strip().upper()
+    username = data.get('username', '').strip()
+    if not code or not username:
+        return jsonify(error="Code and username required"), 400
+    conn = get_conn()
+    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ?', (username,)).fetchone()
+    if not has_team:
+        conn.close()
+        return jsonify(error="You must build your squad before joining a league"), 400
+    group = conn.execute('SELECT * FROM groups_ WHERE code = ?', (code,)).fetchone()
+    if not group:
+        conn.close()
+        return jsonify(error="League not found"), 404
+    already = conn.execute('SELECT 1 FROM league_members WHERE username = ? AND league_code = ?', (username, code)).fetchone()
+    if already:
+        conn.close()
+        return jsonify(error="You are already in this league"), 400
+    conn.execute('INSERT INTO league_members (username, league_code) VALUES (?, ?)', (username, code))
+    conn.commit()
+    conn.close()
+    return jsonify(code=code, name=group['name'])
+
+@app.route('/api/league/<code>/leave', methods=['POST'])
+def leave_league(code):
+    data = request.json
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify(error="Username required"), 400
+    conn = get_conn()
+    conn.execute('DELETE FROM league_members WHERE username = ? AND league_code = ?', (username, code))
+    conn.execute('UPDATE users SET group_id = NULL WHERE username = ? AND group_id = ?', (username, code))
+    conn.commit()
+    conn.close()
+    return jsonify(ok=True)
+
+@app.route('/api/league/<code>/leaderboard')
+def league_leaderboard(code):
+    conn = get_conn()
+    users = conn.execute('''
+        SELECT u.username, u.total_points, u.weekly_points
+        FROM league_members lm
+        JOIN users u ON lm.username = u.username
+        WHERE lm.league_code = ?
+        ORDER BY u.total_points DESC, u.weekly_points DESC
+    ''', (code,)).fetchall()
+    group = conn.execute('SELECT * FROM groups_ WHERE code = ?', (code,)).fetchone()
+    conn.close()
+    result = []
+    for i, u in enumerate(users):
+        result.append({'rank': i + 1, 'username': u['username'], 'weekly_points': u['weekly_points'], 'total_points': u['total_points']})
+    return jsonify(league=dict(group) if group else {}, leaderboard=result)
+
+@app.route('/api/user/<username>/leagues')
+def user_leagues(username):
+    conn = get_conn()
+    leagues = conn.execute('''
+        SELECT g.code, g.name, g.created_by
+        FROM league_members lm
+        JOIN groups_ g ON lm.league_code = g.code
+        WHERE lm.username = ?
+    ''', (username,)).fetchall()
+    result = []
+    for lg in leagues:
+        members = conn.execute('''
+            SELECT u.username, u.total_points
+            FROM league_members lm2
+            JOIN users u ON lm2.username = u.username
+            WHERE lm2.league_code = ?
+            ORDER BY u.total_points DESC
+        ''', (lg['code'],)).fetchall()
+        member_count = len(members)
+        rank = 0
+        for i, m in enumerate(members):
+            if m['username'] == username:
+                rank = i + 1
+                break
+        result.append({
+            'code': lg['code'],
+            'name': lg['name'],
+            'created_by': lg['created_by'],
+            'member_count': member_count,
+            'your_rank': rank,
+            'is_creator': lg['created_by'] == username,
+        })
+    conn.close()
+    return jsonify(result)
+
+@app.route('/api/user/<username>/team-public')
+def user_team_public(username):
+    conn = get_conn()
+    user = conn.execute('SELECT total_points, weekly_points, captain_id, vc_id, impact_id FROM users WHERE username = ?', (username,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify(error="User not found"), 404
+    team_rows = conn.execute('''
+        SELECT p.*, COALESCE(SUM(ps.points), 0) as earned_points
+        FROM user_teams ut
+        JOIN players p ON ut.player_id = p.id
+        LEFT JOIN player_stats ps ON ps.player_id = p.id
+        WHERE ut.username = ?
+        GROUP BY p.id
+        ORDER BY earned_points DESC
+    ''', (username,)).fetchall()
+    conn.close()
+    return jsonify(
+        username=username,
+        total_points=user['total_points'],
+        weekly_points=user['weekly_points'],
+        captain_id=user['captain_id'],
+        vc_id=user['vc_id'],
+        impact_id=user['impact_id'],
+        team=[dict(r) for r in team_rows]
+    )
 
 
 # ── CricAPI Integration ──────────────────────────────────────────────────────
