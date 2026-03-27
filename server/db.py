@@ -4,7 +4,7 @@ import csv
 import re
 import uuid
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fantasy.db')
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fantasy_v2.db')
 CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scrape', 'data.csv')
 
 # Known Indian player names - everyone else is overseas
@@ -164,33 +164,7 @@ def init_db():
         conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
         
     
-    # --- ROBUST MIGRATIONS ---
-    cursor = conn.execute("PRAGMA table_info(users)")
-    columns = [row[1] for row in cursor.fetchall()]
     
-    needed = [
-        ("captain_id", "INTEGER"),
-        ("vc_id", "INTEGER"),
-        ("impact_id", "INTEGER"),
-        ("roles_locked", "INTEGER DEFAULT 0")
-    ]
-    
-    for col_name, col_type in needed:
-        if col_name not in columns:
-            try:
-                conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
-                print(f"Migration: Added {col_name} to users table.")
-            except Exception as e:
-                print(f"Migration Error on {col_name}: {e}")
-    
-    # Check players table too just in case
-    cursor = conn.execute("PRAGMA table_info(players)")
-    p_cols = [row[1] for row in cursor.fetchall()]
-    if "description" not in p_cols:
-        conn.execute("ALTER TABLE players ADD COLUMN description TEXT")
-    if "image" not in p_cols:
-        conn.execute("ALTER TABLE players ADD COLUMN image TEXT")
-    # --------------------------
 
 
     conn.commit()
