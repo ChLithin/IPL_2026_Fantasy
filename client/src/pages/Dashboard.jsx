@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api, BASE } from '../api';
 
 export function AdminDashboard({ user }) {
-  const [groups, setGroups] = useState([]);
+  const [leagues, setLeagues] = useState([]);
   const [leaderboards, setLeaderboards] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -10,10 +10,11 @@ export function AdminDashboard({ user }) {
     async function load() {
       try {
         const ag = await api.getAllGroups();
-        setGroups(ag);
+        setLeagues(ag);
         const lbs = {};
         for (const g of ag) {
-          lbs[g.code] = await api.getLeaderboard(g.code);
+          const data = await api.getLeagueLeaderboard(g.code);
+          lbs[g.code] = data.leaderboard || [];
         }
         setLeaderboards(lbs);
       } catch (e) {
@@ -29,10 +30,10 @@ export function AdminDashboard({ user }) {
 
   return (
     <div style={{maxWidth:900,margin:'0 auto'}}>
-      <h2 style={{fontWeight:900,fontSize:24,marginBottom:24,textAlign:'center'}}>🛡️ Admin: All Active Groups</h2>
-      {groups.length === 0 && <p className="text-center text-muted">No active groups.</p>}
+      <h2 style={{fontWeight:900,fontSize:24,marginBottom:24,textAlign:'center'}}>🛡️ Admin: All Active Leagues</h2>
+      {leagues.length === 0 && <p className="text-center text-muted">No active leagues.</p>}
       <div className="grid-2">
-        {groups.map(g => (
+        {leagues.map(g => (
           <div key={g.code} className="card" style={{borderColor:'rgba(249,205,27,0.3)'}}>
             <div className="flex justify-between items-center mb-3" style={{borderBottom:'1px solid rgba(255,255,255,0.1)',paddingBottom:8}}>
               <h3 style={{fontWeight:900,fontSize:16,color:'#fde047'}}>{g.name}</h3>
