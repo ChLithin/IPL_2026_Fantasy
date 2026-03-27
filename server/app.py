@@ -70,6 +70,20 @@ def login():
     return jsonify(result)
 
 # ── Players ───────────────────────────────────────────────────────────────────
+
+@app.route('/api/debug/db')
+def debug_db():
+    import db
+    import os
+    exists = os.path.exists(db.DB_PATH)
+    size = os.path.getsize(db.DB_PATH) if exists else -1
+    return jsonify({
+        "path": db.DB_PATH,
+        "exists": exists,
+        "size": size,
+        "cwd": os.getcwd()
+    })
+
 @app.route('/api/players')
 def get_players():
     conn = get_conn()
