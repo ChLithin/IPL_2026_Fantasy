@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, BASE } from '../api';
 
-const BUDGET = 100, MAX_PLAYERS = 12, MAX_OVERSEAS = 4, MAX_PER_TEAM = 3;
+const BUDGET = 100, MAX_PLAYERS = 12, MAX_OVERSEAS = 4, MAX_PER_TEAM = 2;
 const ROLE_EMOJI = { BAT: '🏏', BOWL: '⚡', AR: '🌟', WK: '🥊' };
 
 function getViolation(selected, player, isEditMode, initialTeamIds) {
@@ -18,11 +18,15 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
   
   if (player.overseas && selected.filter(p => p.overseas).length >= MAX_OVERSEAS) return `Max ${MAX_OVERSEAS} overseas`;
   
-  // Role constraints for the incoming player
+  // Per-team constraint: max 2 from each IPL team
+  const teamCount = selected.filter(p => p.team_abbr === player.team_abbr).length;
+  if (teamCount >= MAX_PER_TEAM) return `Max ${MAX_PER_TEAM} from ${player.team_abbr}`;
+  
+  // Role constraints (all-rounders count as both BAT & BOWL for max checks)
   const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
-  const nextRoleCount = (roles[player.role] || 0) + 1;
-  const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0) + (player.role === 'BAT' || player.role === 'WK' ? 1 : 0);
   const arCount = (roles['AR'] || 0) + (player.role === 'AR' ? 1 : 0);
+  // Pure bat/wk count (AR already flex into these)
+  const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0) + (player.role === 'BAT' || player.role === 'WK' ? 1 : 0);
   const bowlCount = (roles['BOWL'] || 0) + (player.role === 'BOWL' ? 1 : 0);
   
   if (batCount > 6 && (player.role === 'BAT' || player.role === 'WK')) return 'Max 6 Batsmen (+WK)';
@@ -61,17 +65,23 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
 
   const save = async () => {
         const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
-    const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0);
     const arCount = roles['AR'] || 0;
-    const bowlCount = roles['BOWL'] || 0;
+    // All-rounders count as both batsmen and bowlers for minimum checks
+    const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0) + arCount;
+    const bowlCount = (roles['BOWL'] || 0) + arCount;
     const wkCount = roles['WK'] || 0;
 
     if (selected.length !== MAX_PLAYERS) { setErr(`Squad must have exactly ${MAX_PLAYERS} players`); return; }
     if (wkCount < 1) { setErr("Min 1 Wicket Keeper required"); return; }
-    if (batCount < 3) { setErr("Min 3 Batsmen (+WK) required"); return; }
+    if (batCount < 3) { setErr("Min 3 Batsmen (+WK+AR) required"); return; }
     if (arCount < 1) { setErr("Min 1 All-rounder required"); return; }
-    if (bowlCount < 3) { setErr("Min 3 Bowlers required"); return; }
+    if (bowlCount < 3) { setErr("Min 3 Bowlers (+AR) required"); return; }
     if (selected.filter(p => p.overseas).length > 4) { setErr("Max 4 Overseas allowed"); return; }
+    // Per-team constraint: max 2 from each IPL team
+    const teamCounts = selected.reduce((acc, p) => { acc[p.team_abbr] = (acc[p.team_abbr] || 0) + 1; return acc; }, {});
+    for (const [team, count] of Object.entries(teamCounts)) {
+      if (count > MAX_PER_TEAM) { setErr(`Max ${MAX_PER_TEAM} players from ${team}, you have ${count}`); return; }
+    }
 
     setSaving(true);
     setErr('');

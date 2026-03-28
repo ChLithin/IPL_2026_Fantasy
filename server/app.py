@@ -153,9 +153,13 @@ def save_team():
         roles[p['role']] = roles.get(p['role'], 0) + 1
         
     wk_count = roles.get('WK', 0)
-    bat_count = roles.get('BAT', 0) + wk_count
     ar_count = roles.get('AR', 0)
-    bowl_count = roles.get('BOWL', 0)
+    # All-rounders count as both batsmen and bowlers for minimum checks
+    bat_count = roles.get('BAT', 0) + wk_count + ar_count
+    bowl_count = roles.get('BOWL', 0) + ar_count
+    # Pure role counts for max checks
+    pure_bat_count = roles.get('BAT', 0) + wk_count
+    pure_bowl_count = roles.get('BOWL', 0)
 
     errors = []
     if len(players) != 12:
@@ -166,16 +170,20 @@ def save_team():
         errors.append(f"Max 4 overseas, got {overseas_count}")
     if wk_count < 1:
         errors.append("Min 1 Wicket Keeper required")
-    if bat_count < 3 or bat_count > 6:
-        errors.append("Batsmen (+WK) must be between 3 and 6")
+    if bat_count < 3:
+        errors.append("Batsmen (+WK+AR) must be at least 3")
+    if pure_bat_count > 6:
+        errors.append("Batsmen (+WK) must be at most 6")
     if ar_count < 1 or ar_count > 5:
         errors.append("All-rounders must be between 1 and 5")
-    if bowl_count < 3 or bowl_count > 6:
-        errors.append("Bowlers must be between 3 and 6")
+    if bowl_count < 3:
+        errors.append("Bowlers (+AR) must be at least 3")
+    if pure_bowl_count > 6:
+        errors.append("Bowlers must be at most 6")
         
     for t, c in team_counts.items():
-        if c > 3:
-            errors.append(f"Max 3 from {t}, got {c}")
+        if c > 2:
+            errors.append(f"Max 2 from {t}, got {c}")
     if errors:
         conn.close()
         return jsonify(error="; ".join(errors)), 400
