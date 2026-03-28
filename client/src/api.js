@@ -27,8 +27,8 @@ export const api = {
     request(`/api/players/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePlayer: (id) =>
     request(`/api/players/${id}`, { method: 'DELETE' }),
-  saveTeam: (username, player_ids) =>
-    request('/api/team', { method: 'POST', body: JSON.stringify({ username, player_ids }) }),
+  saveTeam: (username, player_ids, use_unlimited = false) =>
+    request('/api/team', { method: 'POST', body: JSON.stringify({ username, player_ids, use_unlimited }) }),
   getTeam: (username) => request(`/api/team/${username}`),
   getUser: (username) => request(`/api/user/${username}`),
   createGroup: (username, name) =>
@@ -64,6 +64,8 @@ export const api = {
   
   
   setRoles: (data) => request('/api/set-roles', { method: 'POST', body: JSON.stringify(data) }),
+  activateChip: (username, chip) =>
+    request('/api/activate-chip', { method: 'POST', body: JSON.stringify({ username, chip }) }),
 };
 
 // Additional method for deleting groups

@@ -108,7 +108,13 @@ def init_db():
             captain_id INTEGER,
             vc_id INTEGER,
             impact_id INTEGER,
-            roles_locked INTEGER DEFAULT 0
+            roles_locked INTEGER DEFAULT 0,
+            free_transfers INTEGER DEFAULT 2,
+            triple_captain_used INTEGER DEFAULT 0,
+            unlimited_transfers_used INTEGER DEFAULT 0,
+            triple_captain_active INTEGER DEFAULT 0,
+            unlimited_transfers_active INTEGER DEFAULT 0,
+            transfer_penalty INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY,
@@ -190,7 +196,13 @@ def init_db():
         ("captain_id", "INTEGER"),
         ("vc_id", "INTEGER"),
         ("impact_id", "INTEGER"),
-        ("roles_locked", "INTEGER DEFAULT 0")
+        ("roles_locked", "INTEGER DEFAULT 0"),
+        ("free_transfers", "INTEGER DEFAULT 2"),
+        ("triple_captain_used", "INTEGER DEFAULT 0"),
+        ("unlimited_transfers_used", "INTEGER DEFAULT 0"),
+        ("triple_captain_active", "INTEGER DEFAULT 0"),
+        ("unlimited_transfers_active", "INTEGER DEFAULT 0"),
+        ("transfer_penalty", "INTEGER DEFAULT 0"),
     ]
     for col_name, col_type in needed:
         if col_name not in columns:

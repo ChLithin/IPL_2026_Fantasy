@@ -71,6 +71,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
   const [vc, setVc] = useState(null);
   const [imp, setImp] = useState(null);
   const [roleMsg, setRoleMsg] = useState('');
+  const [chipMsg, setChipMsg] = useState('');
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
@@ -88,6 +89,21 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
       setRoleMsg("Roles Locked for the week! 🔒");
       loadData();
     } catch(e) { setRoleMsg(e.message); }
+  };
+
+  const handleActivateChip = async (chip) => {
+    const chipName = chip === 'triple_captain' ? 'Triple Captain (3x)' : 'Unlimited Transfers';
+    const confirmed = window.confirm(
+      `Are you sure you want to activate ${chipName}?\n\nThis can only be used ONCE the entire season. It will be active for this week only.`
+    );
+    if (!confirmed) return;
+    try {
+      await api.activateChip(user.username, chip);
+      setChipMsg(`${chipName} activated! 🎉`);
+      loadData();
+    } catch (e) {
+      setChipMsg(e.message);
+    }
   };
 
   const loadData = async () => {
@@ -210,7 +226,99 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
           </div>
         )}
 
-        
+        {/* ── Power-Ups / Chips ────────────────────────────────────────────── */}
+        {hasTeam && (
+          <div className="card mb-4" style={{borderColor:'rgba(192,132,252,0.3)', background:'linear-gradient(135deg, rgba(192,132,252,0.05), transparent)'}}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 style={{fontWeight:900, fontSize:16}}>🃏 Season Chips</h3>
+              <span className="text-xs text-muted">Use once per season</span>
+            </div>
+            {chipMsg && <div className="alert alert-info py-2 text-xs mb-3">{chipMsg}</div>}
+            <div className="grid-2 gap-3">
+              {/* Triple Captain */}
+              <div className="card" style={{
+                padding:16, textAlign:'center', position:'relative',
+                borderColor: userData.triple_captain_active ? '#c084fc80' : userData.triple_captain_used ? 'rgba(255,255,255,0.05)' : '#c084fc40',
+                background: userData.triple_captain_active ? 'rgba(192,132,252,0.15)' : 'rgba(255,255,255,0.02)',
+                opacity: userData.triple_captain_used && !userData.triple_captain_active ? 0.5 : 1,
+              }}>
+                {userData.triple_captain_active && (
+                  <div style={{position:'absolute',top:8,right:8}}>
+                    <span className="badge" style={{background:'#c084fc',color:'#000',fontWeight:900,fontSize:9,animation:'pulse 2s infinite'}}>ACTIVE</span>
+                  </div>
+                )}
+                <div style={{fontSize:32,marginBottom:8}}>👑</div>
+                <div style={{fontWeight:900,fontSize:14,marginBottom:4}}>Triple Captain</div>
+                <div className="text-xs text-muted mb-3">Your captain earns <strong style={{color:'#c084fc'}}>3x points</strong> instead of 2x this week</div>
+                {userData.triple_captain_used ? (
+                  <div className="text-xs" style={{color: userData.triple_captain_active ? '#c084fc' : '#ef4444', fontWeight:700}}>
+                    {userData.triple_captain_active ? '✓ Active this week' : '✗ Already used this season'}
+                  </div>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => handleActivateChip('triple_captain')}
+                    style={{background:'linear-gradient(135deg,#c084fc,#818cf8)',color:'#000',fontWeight:900,border:'none',width:'100%',justifyContent:'center'}}>
+                    Activate 👑
+                  </button>
+                )}
+              </div>
+
+              {/* Unlimited Transfers */}
+              <div className="card" style={{
+                padding:16, textAlign:'center', position:'relative',
+                borderColor: userData.unlimited_transfers_active ? '#34d39980' : userData.unlimited_transfers_used ? 'rgba(255,255,255,0.05)' : '#34d39940',
+                background: userData.unlimited_transfers_active ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.02)',
+                opacity: userData.unlimited_transfers_used && !userData.unlimited_transfers_active ? 0.5 : 1,
+              }}>
+                {userData.unlimited_transfers_active && (
+                  <div style={{position:'absolute',top:8,right:8}}>
+                    <span className="badge" style={{background:'#34d399',color:'#000',fontWeight:900,fontSize:9,animation:'pulse 2s infinite'}}>ACTIVE</span>
+                  </div>
+                )}
+                <div style={{fontSize:32,marginBottom:8}}>♾️</div>
+                <div style={{fontWeight:900,fontSize:14,marginBottom:4}}>Unlimited Transfers</div>
+                <div className="text-xs text-muted mb-3">Make <strong style={{color:'#34d399'}}>unlimited swaps</strong> with no penalty this week</div>
+                {userData.unlimited_transfers_used ? (
+                  <div className="text-xs" style={{color: userData.unlimited_transfers_active ? '#34d399' : '#ef4444', fontWeight:700}}>
+                    {userData.unlimited_transfers_active ? '✓ Active this week' : '✗ Already used this season'}
+                  </div>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => handleActivateChip('unlimited_transfers')}
+                    style={{background:'linear-gradient(135deg,#34d399,#14b8a6)',color:'#000',fontWeight:900,border:'none',width:'100%',justifyContent:'center'}}>
+                    Activate ♾️
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Transfer Economy Info */}
+            <div className="mt-3 pt-3" style={{borderTop:'1px solid rgba(255,255,255,0.08)'}}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span style={{fontSize:16}}>🔄</span>
+                  <div>
+                    <div className="text-xs font-bold">Free Transfers</div>
+                    <div className="text-xs text-muted">Unused transfers carry over (max 5)</div>
+                  </div>
+                </div>
+                <div style={{
+                  fontWeight:900, fontSize:20,
+                  background: 'linear-gradient(135deg,#f9cd1b,#ff8c00)',
+                  WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent'
+                }}>
+                  {userData.free_transfers ?? 2}
+                </div>
+              </div>
+              {(userData.transfer_penalty || 0) > 0 && (
+                <div className="flex justify-between items-center mt-2 pt-2" style={{borderTop:'1px solid rgba(255,255,255,0.05)'}}>
+                  <div className="text-xs text-muted">⚠ Season Transfer Penalty</div>
+                  <div style={{fontWeight:900, color:'#ef4444', fontSize:14}}>-{userData.transfer_penalty} pts</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Weekly Roles */}
         {hasTeam && (
           <div className="card mb-4" style={{borderColor: userData.roles_locked ? 'rgba(255,255,255,0.1)' : '#f9cd1b80'}}>
             <div className="flex justify-between items-center mb-3">
@@ -221,7 +329,9 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
             
             <div className="grid-3 gap-2">
               <div className="card p-2 text-center" style={{background:'rgba(255,255,255,0.03)'}}>
-                <div className="text-xs text-muted mb-1">CAPTAIN (2x)</div>
+                <div className="text-xs text-muted mb-1">
+                  CAPTAIN ({userData.triple_captain_active ? <span style={{color:'#c084fc',fontWeight:900}}>3x</span> : '2x'})
+                </div>
                 <select className="input input-sm w-full" value={cap || ''} onChange={e => setCap(parseInt(e.target.value))} disabled={userData.roles_locked}>
                   <option value="">Select...</option>
                   {team.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -279,7 +389,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
               return (
                 <div key={p.id} className="card" style={{padding:12,textAlign:'center',position:'relative'}}>
                   <div style={{position:'absolute',top:8,left:8,display:'flex',flexDirection:'column',gap:2}}>
-                     {p.id === userData.captain_id && <span className="badge" style={{background:'#fbbf24',color:'#000',fontWeight:900,fontSize:9}}>C</span>}
+                     {p.id === userData.captain_id && <span className="badge" style={{background:'#fbbf24',color:'#000',fontWeight:900,fontSize:9}}>{userData.triple_captain_active ? '3x' : 'C'}</span>}
                      {p.id === userData.vc_id && <span className="badge" style={{background:'#818cf8',color:'#000',fontWeight:900,fontSize:9}}>VC</span>}
                      {p.id === userData.impact_id && <span className="badge" style={{background:'#34d399',color:'#000',fontWeight:900,fontSize:9}}>IP</span>}
                   </div>

@@ -48,10 +48,10 @@ def signup():
         conn.close()
         return jsonify(error="Username already taken"), 400
     is_admin = 1 if admin_pass == ADMIN_PASSWORD else 0
-    conn.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)', (username, password, is_admin))
+    conn.execute('INSERT INTO users (username, password, is_admin, free_transfers) VALUES (?, ?, ?, ?)', (username, password, is_admin, 2))
     conn.commit()
     conn.close()
-    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, captain_id=None, vc_id=None, impact_id=None, roles_locked=False, has_team=False, team=[])
+    return jsonify(username=username, is_admin=bool(is_admin), total_points=0, weekly_points=0, group_id=None, captain_id=None, vc_id=None, impact_id=None, roles_locked=False, has_team=False, team=[], free_transfers=2, triple_captain_used=False, unlimited_transfers_used=False, triple_captain_active=False, unlimited_transfers_active=False, transfer_penalty=0)
 
 # ── Auth: Log In ──────────────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
@@ -88,6 +88,12 @@ def login():
         'roles_locked': bool(user['roles_locked']),
         'has_team': len(team_ids) > 0,
         'team': team_ids,
+        'free_transfers': user['free_transfers'] if user['free_transfers'] is not None else 2,
+        'triple_captain_used': bool(user['triple_captain_used']),
+        'unlimited_transfers_used': bool(user['unlimited_transfers_used']),
+        'triple_captain_active': bool(user['triple_captain_active']),
+        'unlimited_transfers_active': bool(user['unlimited_transfers_active']),
+        'transfer_penalty': user['transfer_penalty'] or 0,
     }
     conn.close()
     return jsonify(result)
@@ -136,6 +142,7 @@ def save_team():
     data = request.json
     username = data.get('username', '').strip()
     player_ids = data.get('player_ids', [])
+    use_unlimited = data.get('use_unlimited', False)
     if not username:
         return jsonify(error="Username required"), 400
     conn = get_conn()
@@ -154,10 +161,8 @@ def save_team():
         
     wk_count = roles.get('WK', 0)
     ar_count = roles.get('AR', 0)
-    # All-rounders count as both batsmen and bowlers for minimum checks
     bat_count = roles.get('BAT', 0) + wk_count + ar_count
     bowl_count = roles.get('BOWL', 0) + ar_count
-    # Pure role counts for max checks
     pure_bat_count = roles.get('BAT', 0) + wk_count
     pure_bowl_count = roles.get('BOWL', 0)
 
@@ -187,13 +192,43 @@ def save_team():
     if errors:
         conn.close()
         return jsonify(error="; ".join(errors)), 400
-    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ?', (username,)).fetchone()
-    if has_team:
+
+    # Check if user already has a team (edit mode)
+    existing_team = conn.execute('SELECT player_id FROM user_teams WHERE username = ?', (username,)).fetchall()
+    is_edit = len(existing_team) > 0
+
+    if is_edit:
         settings = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
         allow_edit = settings['allow_team_edit'] if settings else 0
         if not allow_edit:
             conn.close()
             return jsonify(error="Team editing is currently locked by admin"), 400
+
+        # Count actual transfers (players changed)
+        old_ids = set(r['player_id'] for r in existing_team)
+        new_ids = set(player_ids)
+        transfers_made = len(old_ids - new_ids)  # players removed = players swapped
+
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        free_transfers = user['free_transfers'] if user['free_transfers'] is not None else 2
+        unlimited_active = bool(user['unlimited_transfers_active'])
+
+        if transfers_made > 0 and not unlimited_active:
+            # Calculate penalty for exceeding free transfers
+            extra_transfers = max(0, transfers_made - free_transfers)
+            penalty = extra_transfers * 25
+            remaining_free = max(0, free_transfers - transfers_made)
+
+            # Update free transfers and penalty
+            new_penalty = (user['transfer_penalty'] or 0) + penalty
+            conn.execute('UPDATE users SET free_transfers = ?, transfer_penalty = ? WHERE username = ?',
+                         (remaining_free, new_penalty, username))
+            # Also deduct penalty from total_points immediately
+            if penalty > 0:
+                conn.execute('UPDATE users SET total_points = total_points - ? WHERE username = ?',
+                             (penalty, username))
+        # If unlimited is active, no free_transfers deduction, no penalty
+
     conn.execute('DELETE FROM user_teams WHERE username = ?', (username,))
     for pid in player_ids:
         conn.execute('INSERT INTO user_teams (username, player_id) VALUES (?, ?)', (username, pid))
@@ -303,7 +338,25 @@ def get_user(username):
         if group:
             group_info = dict(group)
     conn.close()
-    return jsonify(username=user['username'], group_id=user['group_id'], total_points=user['total_points'], weekly_points=user['weekly_points'], is_admin=bool(user['is_admin']), captain_id=user['captain_id'], vc_id=user['vc_id'], impact_id=user['impact_id'], roles_locked=bool(user['roles_locked']), team=[dict(r) for r in team_rows], group=group_info)
+    return jsonify(
+        username=user['username'],
+        group_id=user['group_id'],
+        total_points=user['total_points'],
+        weekly_points=user['weekly_points'],
+        is_admin=bool(user['is_admin']),
+        captain_id=user['captain_id'],
+        vc_id=user['vc_id'],
+        impact_id=user['impact_id'],
+        roles_locked=bool(user['roles_locked']),
+        team=[dict(r) for r in team_rows],
+        group=group_info,
+        free_transfers=user['free_transfers'] if user['free_transfers'] is not None else 2,
+        triple_captain_used=bool(user['triple_captain_used']),
+        unlimited_transfers_used=bool(user['unlimited_transfers_used']),
+        triple_captain_active=bool(user['triple_captain_active']),
+        unlimited_transfers_active=bool(user['unlimited_transfers_active']),
+        transfer_penalty=user['transfer_penalty'] or 0,
+    )
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -406,8 +459,8 @@ def update_stats():
     return jsonify(ok=True)
 
 def _recalculate_user_points(conn):
-    users = conn.execute('SELECT username, captain_id, vc_id, impact_id FROM users').fetchall()
-        # Get list of all match stats
+    users = conn.execute('SELECT username, captain_id, vc_id, impact_id, triple_captain_active, transfer_penalty FROM users').fetchall()
+    # Get list of all match stats
     all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
     stats_dict = {} # (pid, mid) -> points
     for s in all_stats:
@@ -427,6 +480,8 @@ def _recalculate_user_points(conn):
         cap_id = u['captain_id']
         vc_id = u['vc_id']
         imp_id = u['impact_id']
+        tc_active = bool(u['triple_captain_active'])
+        penalty = u['transfer_penalty'] or 0
         
         # Iterate over all matches that are 'done'
         done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
@@ -436,10 +491,14 @@ def _recalculate_user_points(conn):
             for pid in squad:
                 pts = stats_dict.get((pid, mid), 0)
                 mul = 1.0
-                if pid == cap_id: mul = 2.0
-                elif pid == vc_id: mul = 1.5
+                if pid == cap_id:
+                    mul = 3.0 if tc_active else 2.0
+                elif pid == vc_id:
+                    mul = 1.5
                 # Impact ID gets 1.0x (standard scoring)
                 total += pts * mul
+        # Subtract transfer penalty from total
+        total -= penalty
         conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?', (total, total, username))
     conn.commit()
 
@@ -453,7 +512,15 @@ def recalculate():
 @app.route('/api/admin/reset-weekly', methods=['POST'])
 def reset_weekly():
     conn = get_conn()
-    conn.execute('UPDATE users SET weekly_points = 0, roles_locked = 0')
+    # Reset weekly state, accumulate free transfers (+2, capped at 5), reset active chips
+    users = conn.execute('SELECT username, free_transfers FROM users').fetchall()
+    for u in users:
+        current_ft = u['free_transfers'] if u['free_transfers'] is not None else 0
+        new_ft = min(current_ft + 2, 5)
+        conn.execute(
+            'UPDATE users SET weekly_points = 0, roles_locked = 0, free_transfers = ?, triple_captain_active = 0, unlimited_transfers_active = 0 WHERE username = ?',
+            (new_ft, u['username'])
+        )
     conn.commit()
     conn.close()
     return jsonify(ok=True)
@@ -546,6 +613,34 @@ def set_roles():
     conn.commit()
     conn.close()
     return jsonify(success=True)
+
+
+# ── Chip Activation ──────────────────────────────────────────────────────────
+@app.route('/api/activate-chip', methods=['POST'])
+def activate_chip():
+    data = request.json
+    username = data.get('username', '').strip()
+    chip = data.get('chip', '').strip()
+    if not username or chip not in ('triple_captain', 'unlimited_transfers'):
+        return jsonify(error="Invalid request"), 400
+    conn = get_conn()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify(error="User not found"), 404
+    if chip == 'triple_captain':
+        if user['triple_captain_used']:
+            conn.close()
+            return jsonify(error="Triple Captain has already been used this season!"), 400
+        conn.execute('UPDATE users SET triple_captain_active = 1, triple_captain_used = 1 WHERE username = ?', (username,))
+    elif chip == 'unlimited_transfers':
+        if user['unlimited_transfers_used']:
+            conn.close()
+            return jsonify(error="Unlimited Transfers has already been used this season!"), 400
+        conn.execute('UPDATE users SET unlimited_transfers_active = 1, unlimited_transfers_used = 1 WHERE username = ?', (username,))
+    conn.commit()
+    conn.close()
+    return jsonify(success=True, chip=chip)
 
 
 # ── League endpoints (multi-league) ──────────────────────────────────────────

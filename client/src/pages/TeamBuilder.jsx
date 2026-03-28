@@ -3,12 +3,14 @@ import { api, BASE } from '../api';
 
 const BUDGET = 100, MAX_PLAYERS = 12, MAX_OVERSEAS = 4, MAX_PER_TEAM = 2;
 const ROLE_EMOJI = { BAT: '🏏', BOWL: '⚡', AR: '🌟', WK: '🥊' };
+const PENALTY_PER_TRANSFER = 25;
 
-function getViolation(selected, player, isEditMode, initialTeamIds) {
+function getViolation(selected, player, isEditMode, initialTeamIds, freeTransfers, unlimitedActive) {
+  // Transfer limit check (only in edit mode)
   const isBuy = !initialTeamIds.includes(player.id);
-  if (isEditMode && isBuy) {
-    const buys = selected.filter(p => !initialTeamIds.includes(p.id)).length;
-    if (buys >= 2) return 'Max 2 transfers limit';
+  if (isEditMode && isBuy && !unlimitedActive) {
+    // No hard block — we allow extra transfers with penalty
+    // But still show info if user has used all free transfers
   }
   if (selected.some(p => p.id === player.id)) return null;
   if (selected.length >= MAX_PLAYERS) return `Squad full (${MAX_PLAYERS} players)`;
@@ -22,10 +24,9 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
   const teamCount = selected.filter(p => p.team_abbr === player.team_abbr).length;
   if (teamCount >= MAX_PER_TEAM) return `Max ${MAX_PER_TEAM} from ${player.team_abbr}`;
   
-  // Role constraints (all-rounders count as both BAT & BOWL for max checks)
+  // Role constraints
   const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
   const arCount = (roles['AR'] || 0) + (player.role === 'AR' ? 1 : 0);
-  // Pure bat/wk count (AR already flex into these)
   const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0) + (player.role === 'BAT' || player.role === 'WK' ? 1 : 0);
   const bowlCount = (roles['BOWL'] || 0) + (player.role === 'BOWL' ? 1 : 0);
   
@@ -37,9 +38,12 @@ function getViolation(selected, player, isEditMode, initialTeamIds) {
 }
 
 export default function TeamBuilder({ user, players, onSave, teamMeta }) {
-    const initialTeamIds = user.team ? user.team.map(p => typeof p === 'object' ? p.id : p) : [];
+  const initialTeamIds = user.team ? user.team.map(p => typeof p === 'object' ? p.id : p) : [];
   const initialTeam = initialTeamIds.map(id => (Array.isArray(players) ? players : []).find(p => p.id === id)).filter(Boolean);
   const isEditMode = initialTeam.length === MAX_PLAYERS;
+  const freeTransfers = user.free_transfers ?? 2;
+  const unlimitedActive = user.unlimited_transfers_active ?? false;
+  
   const [selected, setSelected] = useState(initialTeam);
   const [activeTeam, setActiveTeam] = useState('CSK');
   const [search, setSearch] = useState('');
@@ -63,10 +67,18 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
   const remaining = BUDGET - spent;
   const ovs = selected.filter(p => p.overseas).length;
 
+  // Calculate transfers in edit mode
+  const transfersMade = isEditMode
+    ? selected.filter(p => !initialTeamIds.includes(p.id)).length
+    : 0;
+  const extraTransfers = isEditMode && !unlimitedActive
+    ? Math.max(0, transfersMade - freeTransfers)
+    : 0;
+  const penaltyCost = extraTransfers * PENALTY_PER_TRANSFER;
+
   const save = async () => {
-        const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
+    const roles = selected.reduce((acc, p) => { acc[p.role] = (acc[p.role] || 0) + 1; return acc; }, {});
     const arCount = roles['AR'] || 0;
-    // All-rounders count as both batsmen and bowlers for minimum checks
     const batCount = (roles['BAT'] || 0) + (roles['WK'] || 0) + arCount;
     const bowlCount = (roles['BOWL'] || 0) + arCount;
     const wkCount = roles['WK'] || 0;
@@ -77,16 +89,23 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
     if (arCount < 1) { setErr("Min 1 All-rounder required"); return; }
     if (bowlCount < 3) { setErr("Min 3 Bowlers (+AR) required"); return; }
     if (selected.filter(p => p.overseas).length > 4) { setErr("Max 4 Overseas allowed"); return; }
-    // Per-team constraint: max 2 from each IPL team
     const teamCounts = selected.reduce((acc, p) => { acc[p.team_abbr] = (acc[p.team_abbr] || 0) + 1; return acc; }, {});
     for (const [team, count] of Object.entries(teamCounts)) {
       if (count > MAX_PER_TEAM) { setErr(`Max ${MAX_PER_TEAM} players from ${team}, you have ${count}`); return; }
     }
 
+    // Confirm penalty transfers
+    if (extraTransfers > 0) {
+      const confirmed = window.confirm(
+        `You are making ${extraTransfers} extra transfer(s) beyond your ${freeTransfers} free transfers.\n\nThis will cost you ${penaltyCost} points (-${PENALTY_PER_TRANSFER} per extra transfer).\n\nContinue?`
+      );
+      if (!confirmed) return;
+    }
+
     setSaving(true);
     setErr('');
     try {
-      await api.saveTeam(user.username, selected.map(p => p.id));
+      await api.saveTeam(user.username, selected.map(p => p.id), unlimitedActive);
       onSave();
     } catch (e) {
       setErr(e.message);
@@ -111,6 +130,31 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
             </div>
           ))}
         </div>
+
+        {/* Transfer cost summary in edit mode */}
+        {isEditMode && transfersMade > 0 && (
+          <div className="card mb-3" style={{borderColor: penaltyCost > 0 ? '#ef444480' : '#34d39980'}}>
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="text-xs font-bold" style={{color: penaltyCost > 0 ? '#ef4444' : '#34d399'}}>
+                  {unlimitedActive ? '♾️ Unlimited Transfers Active' : `🔄 ${transfersMade} Transfer(s)`}
+                </div>
+                <div className="text-xs text-muted mt-1">
+                  {unlimitedActive
+                    ? 'No penalty — chip active this week'
+                    : `${Math.min(transfersMade, freeTransfers)} free · ${extraTransfers} paid`
+                  }
+                </div>
+              </div>
+              {penaltyCost > 0 && (
+                <div style={{fontWeight:900, color:'#ef4444', fontSize:16}}>
+                  -{penaltyCost} pts
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="card mb-3">
           <div className="text-muted text-xs font-bold mb-2" style={{letterSpacing:1,textTransform:'uppercase'}}>Team Distribution</div>
           <div className="flex gap-2 flex-wrap">
@@ -140,7 +184,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
         <div className="flex gap-2">
           <button className="btn btn-secondary flex-1" onClick={() => setShowReview(false)}>← Edit</button>
           <button className="btn btn-primary flex-1" onClick={save} disabled={saving} style={{justifyContent:'center'}}>
-            {saving ? 'Saving...' : 'Confirm Team ✓'}
+            {saving ? 'Saving...' : penaltyCost > 0 ? `Confirm Team (-${penaltyCost}pts) ✓` : 'Confirm Team ✓'}
           </button>
         </div>
       </div>
@@ -188,7 +232,7 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
           <div className="grid-4" style={{gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
             {teamPlayers.map(player => {
               const isSel = selected.some(p => p.id === player.id);
-              const violation = getViolation(selected, player, isEditMode, initialTeamIds);
+              const violation = getViolation(selected, player, isEditMode, initialTeamIds, freeTransfers, unlimitedActive);
               const disabled = !!violation && !isSel;
               return (
                 <div key={player.id} onClick={() => !disabled && toggle(player)}
@@ -225,9 +269,29 @@ export default function TeamBuilder({ user, players, onSave, teamMeta }) {
             <div style={{fontWeight:900,fontSize:14,marginBottom:12}}>📋 My Squad</div>
             <div className="mb-2">
               {isEditMode && (
-                <div className="flex justify-between text-xs mb-2 pb-2" style={{borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
-                  <span className="text-muted">Transfers</span>
-                  <span style={{color: '#f9cd1b',fontWeight:700}}>{selected.filter(p => !initialTeamIds.includes(p.id)).length} / 2 used</span>
+                <div className="mb-2 pb-2" style={{borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted">Transfers</span>
+                    <span style={{color: unlimitedActive ? '#c084fc' : extraTransfers > 0 ? '#ef4444' : '#34d399', fontWeight:700}}>
+                      {unlimitedActive ? '♾️ Unlimited' : `${transfersMade} made`}
+                    </span>
+                  </div>
+                  {!unlimitedActive && (
+                    <>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-muted">Free Remaining</span>
+                        <span style={{color: freeTransfers - transfersMade > 0 ? '#34d399' : '#ef4444', fontWeight:700}}>
+                          {Math.max(0, freeTransfers - transfersMade)} / {freeTransfers}
+                        </span>
+                      </div>
+                      {extraTransfers > 0 && (
+                        <div className="flex justify-between text-xs" style={{color:'#ef4444'}}>
+                          <span>⚠ Penalty</span>
+                          <span style={{fontWeight:900}}>-{penaltyCost} pts</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
               <div className="flex justify-between text-xs mb-1">
