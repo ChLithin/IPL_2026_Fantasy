@@ -45,7 +45,13 @@ function AdminTeamModal({ username, teamMeta, onClose }) {
             })}
           </div>
         )}
-        {data && data.team && data.team.length === 0 && <p className="text-muted text-center py-4">No squad built yet</p>}
+        {data && data.team && data.team.length === 0 && (
+          <div className="text-center" style={{padding:'32px 16px'}}>
+            <div style={{fontSize:40,marginBottom:8}}>🏏</div>
+            <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>Yet to Create Team</div>
+            <p className="text-muted text-xs">This user hasn't built their fantasy squad yet.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -151,6 +157,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
 
   // User edit
   const [editUser, setEditUser] = useState(null);
+  const [viewUserTeam, setViewUserTeam] = useState(null);
 
   // CricAPI
   const [cricConfig, setCricConfig] = useState({ cricapi_key: '', auto_fetch: 0, fetch_interval: 600 });
@@ -632,6 +639,9 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
                     <td>{u.is_admin ? "✅" : "—"}</td>
                     <td>
                       <div className="flex gap-1">
+                        <button className="btn btn-sm btn-secondary" onClick={() => setViewUserTeam(u.username)} title="View Team">
+                          {u.team_count > 0 ? '👁' : '👁'}
+                        </button>
                         <button className="btn btn-sm btn-secondary" onClick={() => setEditUser({...u})}>✏️</button>
                         <button className="btn btn-sm btn-danger" onClick={() => deleteUser(u.username)}>🗑</button>
                       </div>
@@ -641,6 +651,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
               </tbody>
             </table>
           </div>
+          {viewUserTeam && <AdminTeamModal username={viewUserTeam} teamMeta={teamMeta} onClose={() => setViewUserTeam(null)} />}
         </div>
       )}
 
