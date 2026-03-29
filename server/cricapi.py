@@ -124,7 +124,7 @@ def extract_player_stats(scorecard_data):
         if not isinstance(inning, dict):
             continue
         
-        # Batting
+        # Batting — also extract catcher names from dismissals
         for b in inning.get("batting", []):
             name = _get_name(b.get("batsman", b.get("name", "")))
             if not name:
@@ -135,6 +135,25 @@ def extract_player_stats(scorecard_data):
             if name not in stats:
                 stats[name] = {"runs": 0, "wickets": 0, "catches": 0}
             stats[name]["runs"] += runs
+            
+            # Extract catches from dismissal info
+            # CricAPI provides: "dismissal-text": "c Hardik Pandya b Shardul Thakur"
+            # and/or "catcher" field with the fielder's name
+            dismissal = str(b.get("dismissal", b.get("dismissal-type", ""))).lower()
+            if dismissal in ("catch", "caught", "c", "lbw"):
+                # Only count actual catches, not lbw
+                if dismissal != "lbw":
+                    catcher_name = _get_name(b.get("catcher", b.get("fielder", "")))
+                    if not catcher_name:
+                        # Try parsing from dismissal-text: "c FielderName b BowlerName"
+                        d_text = str(b.get("dismissal-text", b.get("dismissalText", "")))
+                        if d_text.startswith("c ") and " b " in d_text:
+                            catcher_name = d_text.split("c ", 1)[1].split(" b ")[0].strip()
+                    
+                    if catcher_name:
+                        if catcher_name not in stats:
+                            stats[catcher_name] = {"runs": 0, "wickets": 0, "catches": 0}
+                        stats[catcher_name]["catches"] += 1
         
         # Bowling
         for bl in inning.get("bowling", []):
@@ -148,17 +167,19 @@ def extract_player_stats(scorecard_data):
                 stats[name] = {"runs": 0, "wickets": 0, "catches": 0}
             stats[name]["wickets"] += wickets
         
-        # Catching/Fielding
-        for c in inning.get("catching", inning.get("fielding", [])):
-            name = _get_name(c.get("fielder", c.get("name", "")))
-            if not name:
-                continue
-            
-            catches = int(c.get("catches", c.get("c", c.get("catch", 0))) or 0)
-            
-            if name not in stats:
-                stats[name] = {"runs": 0, "wickets": 0, "catches": 0}
-            stats[name]["catches"] += catches
+        # Catching/Fielding — fallback for APIs that DO provide a separate array
+        catching_data = inning.get("catching", inning.get("fielding", []))
+        if catching_data:
+            for c in catching_data:
+                name = _get_name(c.get("fielder", c.get("name", "")))
+                if not name:
+                    continue
+                
+                catches = int(c.get("catches", c.get("c", c.get("catch", 0))) or 0)
+                
+                if name not in stats:
+                    stats[name] = {"runs": 0, "wickets": 0, "catches": 0}
+                stats[name]["catches"] += catches
     
     return stats
 
