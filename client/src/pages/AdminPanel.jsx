@@ -388,9 +388,10 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
     let matchId = cricLocalMatchId;
     if (!matchId) {
       // Auto-create the match from CricAPI data
+      const IPL_MAP = { "Chennai Super Kings": "CSK", "Royal Challengers Bengaluru": "RCB", "Royal Challengers Bangalore": "RCB", "Mumbai Indians": "MI", "Kolkata Knight Riders": "KKR", "Sunrisers Hyderabad": "SRH", "Delhi Capitals": "DC", "Rajasthan Royals": "RR", "Lucknow Super Giants": "LSG", "Gujarat Titans": "GT", "Punjab Kings": "PBKS" };
       const teams = cricSelectedMatch?.teams || [];
-      const t1 = teams[0]?.substring(0,4)?.toUpperCase() || '???';
-      const t2 = teams[1]?.substring(0,4)?.toUpperCase() || '???';
+      const t1 = IPL_MAP[teams[0]] || teams[0]?.substring(0,3)?.toUpperCase() || '???';
+      const t2 = IPL_MAP[teams[1]] || teams[1]?.substring(0,3)?.toUpperCase() || '???';
       try {
         const res = await api.createMatch(t1, t2, cricSelectedMatch?.date || '', cricSelectedMatch?.name || '');
         matchId = res.id;

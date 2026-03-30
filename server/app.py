@@ -432,7 +432,7 @@ def match_players(mid):
     if not match:
         conn.close()
         return jsonify(error="Match not found"), 404
-    players = conn.execute('SELECT p.*, COALESCE(ps.runs, 0) as runs, COALESCE(ps.wickets, 0) as wickets, COALESCE(ps.catches, 0) as catches, COALESCE(ps.points, 0) as points FROM players p LEFT JOIN player_stats ps ON ps.player_id = p.id AND ps.match_id = ? WHERE p.team_abbr IN (?, ?) ORDER BY p.team_abbr, p.name', (mid, match['team1'], match['team2'])).fetchall()
+    players = conn.execute('SELECT p.*, COALESCE(ps.runs, 0) as runs, COALESCE(ps.wickets, 0) as wickets, COALESCE(ps.catches, 0) as catches, COALESCE(ps.points, 0) as points FROM players p LEFT JOIN player_stats ps ON ps.player_id = p.id AND ps.match_id = ? WHERE p.team_abbr IN (?, ?) OR p.id IN (SELECT player_id FROM player_stats WHERE match_id = ?) ORDER BY p.team_abbr, p.name', (mid, match['team1'], match['team2'], mid)).fetchall()
     conn.close()
     return jsonify(match=dict(match), players=[dict(p) for p in players])
 
@@ -928,7 +928,7 @@ def cricapi_import():
 def cricapi_auto_import():
     """Manually trigger one auto-import cycle (useful for testing)."""
     try:
-        cricapi._auto_fetch_cycle(app)
+        cricapi._auto_fetch_cycle(app, is_manual=True)
         return jsonify(ok=True, message='Auto-import cycle completed')
     except Exception as e:
         return jsonify(error=str(e)), 500

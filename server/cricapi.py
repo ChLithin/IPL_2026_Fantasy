@@ -312,7 +312,7 @@ def stop_auto_fetch():
 
 import datetime
 
-def _auto_fetch_cycle(app):
+def _auto_fetch_cycle(app, is_manual=False):
     """One cycle of the auto-fetch: check for new completed matches and import stats."""
     
     # --- Optimization: Only poll during active IPL hours ---
@@ -343,6 +343,8 @@ def _auto_fetch_cycle(app):
             matches = fetch_current_matches(apikey)
         except Exception as e:
             logger.warning(f"Failed to fetch matches: {e}")
+            if is_manual:
+                raise e
             return
         
         ipl_matches = filter_ipl_matches(matches)
@@ -378,6 +380,8 @@ def _auto_fetch_cycle(app):
                 scorecard_data = fetch_scorecard(apikey, cricapi_id)
             except Exception as e:
                 logger.warning(f"Failed to fetch scorecard for {cricapi_id}: {e}")
+                if is_manual:
+                    raise e
                 continue
             
             # Extract and match stats
