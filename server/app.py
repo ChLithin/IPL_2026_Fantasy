@@ -820,15 +820,10 @@ def _get_global_rank(conn, username):
         user = conn.execute('SELECT total_points FROM users WHERE username = ?', (username,)).fetchone()
         if not user: return None
         pts = user['total_points'] or 0
-        rank = conn.execute('''
-            SELECT COUNT(*) + 1 FROM users 
-            WHERE total_points > ? 
-            AND is_admin = 0 
-            AND EXISTS (SELECT 1 FROM user_teams WHERE username = users.username)
-        ''', (pts,)).fetchone()[0]
+        # Simpler query: just count how many non-admins have more points than you
+        rank = conn.execute('SELECT COUNT(*) + 1 FROM users WHERE total_points > ? AND is_admin = 0', (pts,)).fetchone()[0]
         return rank
     except Exception as e:
-        # Prevent API crash if ranking logic fails
         print(f"Rank calculation error for {username}: {e}")
         return None
 
