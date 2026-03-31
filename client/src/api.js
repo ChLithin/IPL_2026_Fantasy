@@ -38,8 +38,8 @@ export const api = {
   getLeaderboard: (code) => request(`/api/group/${code}/leaderboard`),
   getGroups: () => request('/api/groups'),
   getAllGroups: () => request('/api/groups/all'),
-  kickUser: (code, username) =>
-    request(`/api/groups/${code}/kick`, { method: 'POST', body: JSON.stringify({ username }) }),
+  kickUser: (code, username, requester) =>
+    request(`/api/groups/${code}/kick`, { method: 'POST', body: JSON.stringify({ username, requester }) }),
   getSettings: () => request('/api/settings'),
   updateSettings: (allow_team_edit) =>
     request('/api/settings', { method: 'POST', body: JSON.stringify({ allow_team_edit }) }),

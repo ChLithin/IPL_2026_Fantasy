@@ -26,7 +26,7 @@ def handle_exception(e):
 
 CORS(app)
 
-ADMIN_PASSWORD = "ipl2026admin"
+ADMIN_PASSWORD = "adminIPL2026"
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scrape', 'images')
 
 @app.route('/images/<path:filename>')
@@ -68,7 +68,7 @@ def login():
         conn.close()
         return jsonify(error="User not found. Please Sign Up first."), 404
     stored_pw = user['password'] or ''
-    if stored_pw and stored_pw != password:
+    if stored_pw != password:
         conn.close()
         return jsonify(error="Invalid password"), 401
     if admin_pass == ADMIN_PASSWORD and not user['is_admin']:
@@ -94,6 +94,7 @@ def login():
         'triple_captain_active': bool(user['triple_captain_active']),
         'unlimited_transfers_active': bool(user['unlimited_transfers_active']),
         'transfer_penalty': user['transfer_penalty'] or 0,
+        'global_rank': _get_global_rank(conn, username),
     }
     conn.close()
     return jsonify(result)
@@ -316,7 +317,24 @@ def all_groups():
 def kick_group_member(grp_code):
     data = request.json
     username = data.get('username')
+    requester = data.get('requester')
     conn = get_conn()
+    
+    # Check if requester is group owner or admin
+    group = conn.execute('SELECT created_by FROM groups_ WHERE code = ?', (grp_code,)).fetchone()
+    req_user = conn.execute('SELECT is_admin FROM users WHERE username = ?', (requester,)).fetchone()
+    
+    if not group:
+        conn.close()
+        return jsonify(error="Group not found"), 404
+        
+    is_owner = (group['created_by'] == requester)
+    is_admin = bool(req_user and req_user['is_admin'])
+    
+    if not (is_owner or is_admin):
+        conn.close()
+        return jsonify(error="Unauthorized: Only league owner or admin can kick members"), 403
+
     conn.execute('UPDATE users SET group_id = NULL WHERE username = ? AND group_id = ?', (username, grp_code))
     conn.execute('DELETE FROM league_members WHERE username = ? AND league_code = ?', (username, grp_code))
     conn.commit()
@@ -356,6 +374,7 @@ def get_user(username):
         triple_captain_active=bool(user['triple_captain_active']),
         unlimited_transfers_active=bool(user['unlimited_transfers_active']),
         transfer_penalty=user['transfer_penalty'] or 0,
+        global_rank=_get_global_rank(conn, username),
     )
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -795,6 +814,18 @@ def global_leaderboard():
     for i, u in enumerate(users):
         result.append({'rank': i + 1, 'username': u['username'], 'weekly_points': u['weekly_points'], 'total_points': u['total_points']})
     return jsonify(result)
+
+def _get_global_rank(conn, username):
+    user = conn.execute('SELECT total_points FROM users WHERE username = ?', (username,)).fetchone()
+    if not user: return None
+    pts = user['total_points'] or 0
+    rank = conn.execute('''
+        SELECT COUNT(*) + 1 FROM users 
+        WHERE total_points > ? 
+        AND is_admin = 0 
+        AND EXISTS (SELECT 1 FROM user_teams WHERE username = users.username)
+    ''', (pts,)).fetchone()[0]
+    return rank
 
 # ── CricAPI Integration ──────────────────────────────────────────────────────
 

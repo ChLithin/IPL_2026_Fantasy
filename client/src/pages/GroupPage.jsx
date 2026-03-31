@@ -53,10 +53,26 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewUser, setViewUser] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const loadData = () => {
+    setLoading(true);
+    api.getLeagueLeaderboard(code).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  };
 
   useEffect(() => {
-    api.getLeagueLeaderboard(code).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    loadData();
   }, [code]);
+
+  const handleKick = async (uname) => {
+    if (!window.confirm(`Kick ${uname}?`)) return;
+    try {
+      await api.kickUser(code, uname, user.username);
+      setMsg(`Kicked ${uname}`);
+      loadData();
+    } catch(e) { setErr(e.message); }
+  };
 
   const copyCode = () => {
     navigator.clipboard.writeText(code);
@@ -73,6 +89,9 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
       {viewUser && <TeamModal username={viewUser} teamMeta={teamMeta} onClose={() => setViewUser(null)} />}
       
       <button className="btn btn-sm btn-secondary mb-3" onClick={onBack}>← Back to Leagues</button>
+      
+      {msg && <div className="alert alert-success py-2 text-xs mb-2">{msg}</div>}
+      {err && <div className="alert alert-error py-2 text-xs mb-2">{err}</div>}
       
       <div className="card mb-3 text-center" style={{background:'linear-gradient(135deg, rgba(249,205,27,0.12), transparent)', border:'1px solid rgba(249,205,27,0.25)'}}>
         <h3 style={{fontSize:22,fontWeight:900,color:'#fde047',marginBottom:4}}>{league.name || 'League'}</h3>
@@ -111,7 +130,12 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
               <div style={{fontWeight:900,fontSize:14}}>{u.total_points}</div>
               <div className="text-muted text-xs">total</div>
             </div>
-            <div style={{color:'rgba(255,255,255,0.3)',fontSize:10,flexShrink:0}}>👁</div>
+            <div className="flex items-center gap-2" style={{flexShrink:0}}>
+              {user.username === league.created_by && u.username !== user.username && (
+                <button className="btn btn-sm btn-danger" style={{fontSize:9, padding:'2px 6px'}} onClick={(e) => { e.stopPropagation(); handleKick(u.username); }}>Kick</button>
+              )}
+              <div style={{color:'rgba(255,255,255,0.3)',fontSize:10}}>👁</div>
+            </div>
           </div>
         ))}
       </div>

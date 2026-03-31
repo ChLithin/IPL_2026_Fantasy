@@ -103,7 +103,7 @@ export default function App() {
         {page === 'dashboard' && !user.is_admin && <Dashboard user={user} players={players} teamMeta={TEAM_META} onEditTeam={() => setPage('builder')} />}
         {page === 'group' && <GroupPage user={user} onUpdate={refreshUser} teamMeta={TEAM_META} />}
         
-        {page === 'admin' && <AdminPanel players={players} teamMeta={TEAM_META} onRefresh={refreshPlayers} />}
+        {page === 'admin' && <AdminPanel user={user} players={players} teamMeta={TEAM_META} onRefresh={refreshPlayers} />}
       </div>
     </div>
   );

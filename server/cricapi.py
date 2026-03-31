@@ -360,21 +360,43 @@ def _auto_fetch_cycle(app, is_manual=False):
         for cm in completed:
             cricapi_id = cm.get("id", "")
             
-            # Skip if we already imported this match
-            existing = conn.execute(
+            # Skip if we already imported this match (by ID)
+            existing_by_id = conn.execute(
                 "SELECT id FROM matches WHERE cricapi_match_id = ?", (cricapi_id,)
             ).fetchone()
-            if existing:
+            if existing_by_id:
                 continue
-            
-            logger.info(f"Auto-importing: {cm.get('name', cricapi_id)}")
             
             # Determine team abbreviations
             teams = cm.get("teams", [])
             team1 = IPL_TEAM_NAMES.get(teams[0], teams[0][:3].upper()) if len(teams) > 0 else "???"
             team2 = IPL_TEAM_NAMES.get(teams[1], teams[1][:3].upper()) if len(teams) > 1 else "???"
             date_str = cm.get("date", cm.get("dateTimeGMT", ""))[:10]
+
+            logger.info(f"Auto-importing: {cm.get('name', cricapi_id)}")
             
+            # Check if we already have this match (by teams and date) but it's not linked yet
+            existing_by_teams = conn.execute(
+                "SELECT id FROM matches WHERE (team1 = ? AND team2 = ? AND (date = ? OR date = '')) OR (team1 = ? AND team2 = ? AND (date = ? OR date = ''))", 
+                (team1, team2, date_str, team2, team1, date_str)
+            ).fetchone()
+            
+            if existing_by_teams:
+                # Link it now and use it
+                match_id = existing_by_teams['id']
+                conn.execute(
+                    "UPDATE matches SET cricapi_match_id = ?, status = 'done' WHERE id = ?",
+                    (cricapi_id, match_id)
+                )
+                logger.info(f"Linked existing manual match {match_id} to CricAPI ID {cricapi_id}")
+            else:
+                # Create the match in our DB
+                cur = conn.execute(
+                    "INSERT INTO matches (team1, team2, date, description, status, cricapi_match_id) VALUES (?, ?, ?, ?, 'done', ?)",
+                    (team1, team2, date_str, cm.get("name", f"{team1} vs {team2}"), cricapi_id)
+                )
+                match_id = cur.lastrowid
+
             # Fetch scorecard
             try:
                 scorecard_data = fetch_scorecard(apikey, cricapi_id)
@@ -391,13 +413,6 @@ def _auto_fetch_cycle(app, is_manual=False):
             if not result["matched"]:
                 logger.warning(f"No players matched for match {cricapi_id}")
                 continue
-            
-            # Create the match in our DB
-            cur = conn.execute(
-                "INSERT INTO matches (team1, team2, date, description, status, cricapi_match_id) VALUES (?, ?, ?, ?, 'done', ?)",
-                (team1, team2, date_str, cm.get("name", f"{team1} vs {team2}"), cricapi_id)
-            )
-            match_id = cur.lastrowid
             
             # Insert player stats
             for s in result["matched"]:

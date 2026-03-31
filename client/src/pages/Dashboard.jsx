@@ -130,7 +130,8 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
 
 
   const team = userData.team || [];
-  const rank = leaderboard.findIndex(u => u.username === user.username) + 1;
+  const groupRank = leaderboard.findIndex(u => u.username === user.username) + 1;
+  const globalRank = userData.global_rank;
   const hasTeam = team.length > 0;
 
   const doneMatches = matches.filter(m => m.status === 'done');
@@ -371,7 +372,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
           {[
             {lbl:'Total Points', val:userData.total_points, icon:'⚡', grad:'linear-gradient(135deg,#f9cd1b,#ff8c00)'},
             {lbl:'This Week', val:userData.weekly_points, icon:'📅', grad:'linear-gradient(135deg,#34d399,#14b8a6)'},
-            {lbl:'Your Rank', val:rank?`#${rank}`:'—', icon:'🎯', grad:'linear-gradient(135deg,#c084fc,#818cf8)'},
+            {lbl:'Global Rank', val:globalRank?`#${globalRank}`:'—', icon:'🌎', grad:'linear-gradient(135deg,#c084fc,#818cf8)'},
           ].map(s => (
             <div key={s.lbl} className="card text-center">
               <div style={{fontSize:20,marginBottom:4}}>{s.icon}</div>

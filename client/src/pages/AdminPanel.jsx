@@ -130,7 +130,7 @@ function LeagueRow({ league, teamMeta, onKick, onDelete, onRefresh }) {
   );
 }
 
-export default function AdminPanel({ players, teamMeta, onRefresh }) {
+export default function AdminPanel({ user, players, teamMeta, onRefresh }) {
   const [tab, setTab] = useState("matches");
   const [matches, setMatches] = useState([]);
   const [settings, setSettings] = useState({ allow_team_edit: 0 });
@@ -201,7 +201,7 @@ export default function AdminPanel({ players, teamMeta, onRefresh }) {
   const handleKick = async (code, username) => {
     if (!confirm(`Kick ${username}?`)) return;
     try {
-      await api.kickUser(code, username);
+      await api.kickUser(code, username, user.username);
       showMsg("User kicked out of group");
       loadUsers();
     } catch(e) { showErr(e.message); }
