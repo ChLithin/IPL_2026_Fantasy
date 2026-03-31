@@ -1,7 +1,8 @@
 import sqlite3
 import os
 
-DB_PATH = '/Users/lithin/.gemini/antigravity/brain/cdb56d1c-44cf-46eb-8c8a-9ae39d2f1169/IPL/server/fantasy_v2.db'
+# Portable relative path for any environment
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fantasy_v2.db')
 
 def update_admin_pass():
     if not os.path.exists(DB_PATH):
