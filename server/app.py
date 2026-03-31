@@ -817,12 +817,13 @@ def global_leaderboard():
 
 def _get_global_rank(conn, username):
     try:
-        user = conn.execute('SELECT total_points FROM users WHERE username = ?', (username,)).fetchone()
-        if not user: return None
-        pts = user['total_points'] or 0
-        # Simpler query: just count how many non-admins have more points than you
-        rank = conn.execute('SELECT COUNT(*) + 1 FROM users WHERE total_points > ? AND is_admin = 0', (pts,)).fetchone()[0]
-        return rank
+        # Get all non-admin users sorted by points
+        users = conn.execute('SELECT username FROM users WHERE is_admin = 0 ORDER BY total_points DESC').fetchall()
+        # Find the index of the current user
+        for i, u in enumerate(users):
+            if u['username'] == username:
+                return i + 1
+        return None
     except Exception as e:
         print(f"Rank calculation error for {username}: {e}")
         return None
