@@ -478,6 +478,10 @@ def update_stats():
     return jsonify(ok=True)
 
 def _recalculate_user_points(conn):
+    # Get week boundary: only matches with id > week_start_match_id count for weekly points
+    settings = conn.execute('SELECT week_start_match_id FROM settings WHERE id = 1').fetchone()
+    week_start_mid = settings['week_start_match_id'] if settings and settings['week_start_match_id'] else 0
+
     users = conn.execute('SELECT username, captain_id, vc_id, impact_id, triple_captain_active, transfer_penalty FROM users').fetchall()
     # Get list of all match stats
     all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
@@ -492,21 +496,22 @@ def _recalculate_user_points(conn):
         if up['username'] not in u_players: u_players[up['username']] = []
         u_players[up['username']].append(up['player_id'])
 
+    # Get all done matches, split into all-time and this-week
+    done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
+    all_match_ids = [m['id'] for m in done_matches]
+    this_week_ids = set(m['id'] for m in done_matches if m['id'] > week_start_mid)
+
     for u in users:
         username = u['username']
         total = 0
+        weekly = 0
         squad = u_players.get(username, [])
         cap_id = u['captain_id']
         vc_id = u['vc_id']
-        imp_id = u['impact_id']
         tc_active = bool(u['triple_captain_active'])
         penalty = u['transfer_penalty'] or 0
-        
-        # Iterate over all matches that are 'done'
-        done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
-        for m in done_matches:
-            mid = m['id']
-            # Score for all 12 players in the squad (if they played in this match)
+
+        for mid in all_match_ids:
             for pid in squad:
                 pts = stats_dict.get((pid, mid), 0)
                 mul = 1.0
@@ -514,11 +519,15 @@ def _recalculate_user_points(conn):
                     mul = 3.0 if tc_active else 2.0
                 elif pid == vc_id:
                     mul = 1.5
-                # Impact ID gets 1.0x (standard scoring)
                 total += pts * mul
-        # Subtract transfer penalty from total
+                # Only count this week's matches for weekly_points
+                if mid in this_week_ids:
+                    weekly += pts * mul
+
+        # Subtract transfer penalty from total only
         total -= penalty
-        conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?', (total, total, username))
+        conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?',
+                     (int(total), int(weekly), username))
     conn.commit()
 
 @app.route('/api/admin/recalculate', methods=['POST'])
@@ -531,6 +540,12 @@ def recalculate():
 @app.route('/api/admin/reset-weekly', methods=['POST'])
 def reset_weekly():
     conn = get_conn()
+    # Record current max match ID as the week boundary
+    # Any match with id > this value will count for the NEW week's points
+    max_match = conn.execute('SELECT COALESCE(MAX(id), 0) as mid FROM matches').fetchone()
+    week_start = max_match['mid'] if max_match else 0
+    conn.execute('UPDATE settings SET week_start_match_id = ? WHERE id = 1', (week_start,))
+
     # Reset weekly state, accumulate free transfers (+2, capped at 5), reset active chips
     users = conn.execute('SELECT username, free_transfers FROM users').fetchall()
     for u in users:

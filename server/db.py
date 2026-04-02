@@ -223,7 +223,7 @@ def init_db():
 
 def _migrate_cricapi_columns(conn):
     """Add CricAPI-related columns to existing tables if they don't exist."""
-    # Settings table: cricapi_key, auto_fetch, fetch_interval
+    # Settings table: cricapi_key, auto_fetch, fetch_interval, week_start_match_id
     cols = [row[1] for row in conn.execute('PRAGMA table_info(settings)').fetchall()]
     if 'cricapi_key' not in cols:
         conn.execute("ALTER TABLE settings ADD COLUMN cricapi_key TEXT DEFAULT ''")
@@ -231,6 +231,8 @@ def _migrate_cricapi_columns(conn):
         conn.execute('ALTER TABLE settings ADD COLUMN auto_fetch INTEGER DEFAULT 0')
     if 'fetch_interval' not in cols:
         conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
+    if 'week_start_match_id' not in cols:
+        conn.execute('ALTER TABLE settings ADD COLUMN week_start_match_id INTEGER DEFAULT 0')
     # Matches table: cricapi_match_id
     cols2 = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
     if 'cricapi_match_id' not in cols2:
