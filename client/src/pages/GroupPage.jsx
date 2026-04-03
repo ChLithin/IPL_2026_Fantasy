@@ -55,6 +55,7 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
   const [viewUser, setViewUser] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [sortBy, setSortBy] = useState('total'); // 'total' or 'weekly'
 
   const loadData = () => {
     setLoading(true);
@@ -82,7 +83,10 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
   if (!data) return <p className="text-muted text-center">Could not load leaderboard</p>;
 
   const league = data.league || {};
-  const lb = data.leaderboard || [];
+  // Sort by selected mode
+  const lb = [...(data.leaderboard || [])].sort((a, b) =>
+    sortBy === 'weekly' ? (b.weekly_points - a.weekly_points) : (b.total_points - a.total_points)
+  );
 
   return (
     <div>
@@ -103,7 +107,21 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
       </div>
 
       <div className="card">
-        <div className="text-muted text-xs font-bold mb-3" style={{letterSpacing:1,textTransform:'uppercase'}}>🏅 Leaderboard</div>
+        <div className="flex justify-between items-center mb-3">
+          <div className="text-muted text-xs font-bold" style={{letterSpacing:1,textTransform:'uppercase'}}>🏅 Leaderboard</div>
+          <div className="flex gap-1">
+            <button onClick={() => setSortBy('total')} style={{
+              fontSize:10, padding:'3px 10px', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700,
+              background: sortBy==='total' ? 'linear-gradient(135deg,#f9cd1b,#ff8c00)' : 'rgba(255,255,255,0.08)',
+              color: sortBy==='total' ? '#000' : '#94a3b8',
+            }}>Overall</button>
+            <button onClick={() => setSortBy('weekly')} style={{
+              fontSize:10, padding:'3px 10px', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700,
+              background: sortBy==='weekly' ? 'linear-gradient(135deg,#34d399,#14b8a6)' : 'rgba(255,255,255,0.08)',
+              color: sortBy==='weekly' ? '#000' : '#94a3b8',
+            }}>This Week</button>
+          </div>
+        </div>
         {lb.length === 0 && <p className="text-muted text-center" style={{padding:40}}>No members yet</p>}
         {lb.map((u,i) => (
           <div key={u.username} className="flex items-center gap-3" style={{
@@ -124,11 +142,15 @@ function LeaderboardView({ code, user, teamMeta, onBack }) {
               <div className="truncate" style={{fontWeight:700,fontSize:13,color:u.username===user.username?"#fde047":"#fff"}}>
                 {u.username} {u.username===user.username && <span className="text-muted text-xs">(you)</span>}
               </div>
-              <div style={{color:"#34d399",fontSize:11}}>+{u.weekly_points} this week</div>
+              <div style={{color:"#94a3b8",fontSize:11}}>
+                {sortBy==='weekly' ? `${u.total_points} total` : `+${u.weekly_points} this week`}
+              </div>
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{fontWeight:900,fontSize:14}}>{u.total_points}</div>
-              <div className="text-muted text-xs">total</div>
+              <div style={{fontWeight:900,fontSize:14,color: sortBy==='weekly' ? '#34d399' : '#fff'}}>
+                {sortBy==='weekly' ? u.weekly_points : u.total_points}
+              </div>
+              <div className="text-muted text-xs">{sortBy==='weekly' ? 'this week' : 'total'}</div>
             </div>
             <div className="flex items-center gap-2" style={{flexShrink:0}}>
               {user.username === league.created_by && u.username !== user.username && (
@@ -156,6 +178,7 @@ export default function GroupPage({ user, onUpdate, teamMeta }) {
   const [globalLb, setGlobalLb] = useState([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [viewUser, setViewUser] = useState(null);
+  const [globalSortBy, setGlobalSortBy] = useState('total'); // 'total' or 'weekly'
 
   useEffect(() => { loadMyLeagues(); }, []);
 
@@ -339,9 +362,24 @@ export default function GroupPage({ user, onUpdate, teamMeta }) {
             <p className="text-muted text-xs">Top 100 players across the entire platform</p>
           </div>
           <div className="card">
+            <div className="flex justify-between items-center mb-3">
+              <div className="text-muted text-xs font-bold" style={{letterSpacing:1,textTransform:'uppercase'}}>🏅 Rankings</div>
+              <div className="flex gap-1">
+                <button onClick={() => setGlobalSortBy('total')} style={{
+                  fontSize:10, padding:'3px 10px', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700,
+                  background: globalSortBy==='total' ? 'linear-gradient(135deg,#f9cd1b,#ff8c00)' : 'rgba(255,255,255,0.08)',
+                  color: globalSortBy==='total' ? '#000' : '#94a3b8',
+                }}>Overall</button>
+                <button onClick={() => setGlobalSortBy('weekly')} style={{
+                  fontSize:10, padding:'3px 10px', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700,
+                  background: globalSortBy==='weekly' ? 'linear-gradient(135deg,#34d399,#14b8a6)' : 'rgba(255,255,255,0.08)',
+                  color: globalSortBy==='weekly' ? '#000' : '#94a3b8',
+                }}>This Week</button>
+              </div>
+            </div>
             {globalLoading && <div className="spinner" />}
             {!globalLoading && globalLb.length === 0 && <p className="text-muted text-center" style={{padding:40}}>No players with teams yet</p>}
-            {globalLb.map((u,i) => {
+            {[...globalLb].sort((a,b) => globalSortBy==='weekly' ? (b.weekly_points - a.weekly_points) : (b.total_points - a.total_points)).map((u,i) => {
               const isYou = u.username === user.username;
               return (
                 <div key={u.username} className="flex items-center gap-3" style={{
@@ -362,11 +400,15 @@ export default function GroupPage({ user, onUpdate, teamMeta }) {
                     <div className="truncate" style={{fontWeight:700,fontSize:13,color:isYou?'#fde047':'#fff'}}>
                       {u.username} {isYou && <span className="text-muted text-xs">(you)</span>}
                     </div>
-                    <div style={{color:'#34d399',fontSize:11}}>+{u.weekly_points} this week</div>
+                    <div style={{color:'#94a3b8',fontSize:11}}>
+                      {globalSortBy==='weekly' ? `${u.total_points} total` : `+${u.weekly_points} this week`}
+                    </div>
                   </div>
                   <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontWeight:900,fontSize:14}}>{u.total_points}</div>
-                    <div className="text-muted text-xs">total</div>
+                    <div style={{fontWeight:900,fontSize:14,color: globalSortBy==='weekly' ? '#34d399' : '#fff'}}>
+                      {globalSortBy==='weekly' ? u.weekly_points : u.total_points}
+                    </div>
+                    <div className="text-muted text-xs">{globalSortBy==='weekly' ? 'this week' : 'total'}</div>
                   </div>
                   <div style={{color:'rgba(255,255,255,0.3)',fontSize:10,flexShrink:0}}>👁</div>
                 </div>
