@@ -233,6 +233,11 @@ def _migrate_cricapi_columns(conn):
         conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
     if 'week_start_match_id' not in cols:
         conn.execute('ALTER TABLE settings ADD COLUMN week_start_match_id INTEGER DEFAULT 0')
+    # user_teams table: joined_at_match_id tracks when each player joined a user's squad
+    # 0 = original squad (counts all history), N = transferred in after match N (only earns from N+1 onward)
+    cols3 = [row[1] for row in conn.execute('PRAGMA table_info(user_teams)').fetchall()]
+    if 'joined_at_match_id' not in cols3:
+        conn.execute('ALTER TABLE user_teams ADD COLUMN joined_at_match_id INTEGER DEFAULT 0')
     # Matches table: cricapi_match_id
     cols2 = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
     if 'cricapi_match_id' not in cols2:

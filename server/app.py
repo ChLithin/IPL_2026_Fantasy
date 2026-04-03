@@ -198,6 +198,11 @@ def save_team():
     existing_team = conn.execute('SELECT player_id FROM user_teams WHERE username = ?', (username,)).fetchall()
     is_edit = len(existing_team) > 0
 
+    # Save existing player join dates BEFORE any deletions
+    old_joined_at = {}
+    new_player_ids = set()
+    transfer_join_point = 0
+
     if is_edit:
         settings = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
         allow_edit = settings['allow_team_edit'] if settings else 0
@@ -205,10 +210,19 @@ def save_team():
             conn.close()
             return jsonify(error="Team editing is currently locked by admin"), 400
 
+        # Fetch current join dates for all existing players before we delete them
+        joined_rows = conn.execute(
+            'SELECT player_id, COALESCE(joined_at_match_id, 0) as jat FROM user_teams WHERE username = ?',
+            (username,)
+        ).fetchall()
+        for r in joined_rows:
+            old_joined_at[r['player_id']] = r['jat']
+
         # Count actual transfers (players changed)
         old_ids = set(r['player_id'] for r in existing_team)
         new_ids = set(player_ids)
         transfers_made = len(old_ids - new_ids)  # players removed = players swapped
+        new_player_ids = new_ids - old_ids       # players being transferred IN
 
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         free_transfers = user['free_transfers'] if user['free_transfers'] is not None else 2
@@ -230,9 +244,24 @@ def save_team():
                              (penalty, username))
         # If unlimited is active, no free_transfers deduction, no penalty
 
+        # Record where new players join from — they only earn points from FUTURE matches
+        max_match_row = conn.execute(
+            'SELECT COALESCE(MAX(id), 0) as mid FROM matches WHERE status = "done"'
+        ).fetchone()
+        transfer_join_point = max_match_row['mid'] if max_match_row else 0
+
     conn.execute('DELETE FROM user_teams WHERE username = ?', (username,))
     for pid in player_ids:
-        conn.execute('INSERT INTO user_teams (username, player_id) VALUES (?, ?)', (username, pid))
+        if pid in new_player_ids:
+            # Transferred in: only earns points from matches AFTER this point
+            joined_at = transfer_join_point
+        else:
+            # Kept player or initial squad build: preserve existing join date (0 = all history)
+            joined_at = old_joined_at.get(pid, 0)
+        conn.execute(
+            'INSERT INTO user_teams (username, player_id, joined_at_match_id) VALUES (?, ?, ?)',
+            (username, pid, joined_at)
+        )
     conn.commit()
     conn.close()
     return jsonify(ok=True)
@@ -489,12 +518,16 @@ def _recalculate_user_points(conn):
     for s in all_stats:
         stats_dict[(s['player_id'], s['match_id'])] = s['points']
 
-    # Get user squad members
-    all_user_players = conn.execute('SELECT * FROM user_teams').fetchall()
-    u_players = {} # username -> [ids]
+    # Load squad WITH join dates — critical for correct points after transfers
+    # joined_at = 0 means original squad (counts all matches)
+    # joined_at = N means transferred in after match N (only counts matches > N)
+    all_user_players = conn.execute(
+        'SELECT username, player_id, COALESCE(joined_at_match_id, 0) as joined_at FROM user_teams'
+    ).fetchall()
+    u_players = {}  # username -> [(pid, joined_at_match_id)]
     for up in all_user_players:
         if up['username'] not in u_players: u_players[up['username']] = []
-        u_players[up['username']].append(up['player_id'])
+        u_players[up['username']].append((up['player_id'], up['joined_at']))
 
     # Get all done matches, split into all-time and this-week
     done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
@@ -512,7 +545,11 @@ def _recalculate_user_points(conn):
         penalty = u['transfer_penalty'] or 0
 
         for mid in all_match_ids:
-            for pid in squad:
+            for (pid, joined_at) in squad:
+                # KEY FIX: skip stats for matches played BEFORE or ON the player's join date
+                # This prevents transferred-in players from earning historical points
+                if mid <= joined_at:
+                    continue
                 pts = stats_dict.get((pid, mid), 0)
                 mul = 1.0
                 if pid == cap_id:
