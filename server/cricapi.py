@@ -318,10 +318,10 @@ def _auto_fetch_cycle(app, is_manual=False):
                 for s in result["matched"]:
                     pts = calc_points(s["runs"], s["wickets"], s["catches"])
                     conn.execute(
-                        \"\"\"INSERT INTO player_stats (player_id, match_id, runs, wickets, catches, points)
+                        """INSERT INTO player_stats (player_id, match_id, runs, wickets, catches, points)
                            VALUES (?, ?, ?, ?, ?, ?)
                            ON CONFLICT(player_id, match_id) DO UPDATE SET
-                           runs = ?, wickets = ?, catches = ?, points = ?\"\"\",
+                           runs = ?, wickets = ?, catches = ?, points = ?""",
                         (s["player_id"], match_id, s["runs"], s["wickets"], s["catches"], pts,
                          s["runs"], s["wickets"], s["catches"], pts)
                     )

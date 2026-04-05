@@ -85,7 +85,7 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.executescript(\"\"\"
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -99,7 +99,7 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
-            password TEXT DEFAULT \"\",
+            password TEXT DEFAULT "",
             group_id TEXT DEFAULT NULL,
             total_points INTEGER DEFAULT 0,
             weekly_points INTEGER DEFAULT 0,
@@ -164,30 +164,30 @@ def init_db():
             FOREIGN KEY (match_id) REFERENCES matches(id),
             UNIQUE(player_id, match_id)
         );
-    \"\"\")
+    """)
     # Ensure settings row exists
     has_settings = conn.execute('SELECT 1 FROM settings WHERE id = 1').fetchone()
     if not has_settings:
         conn.execute('INSERT INTO settings (id, allow_team_edit) VALUES (1, 0)')
     
     # --- ROBUST MIGRATIONS ---
-    cursor = conn.execute(\"PRAGMA table_info(users)\")
+    cursor = conn.execute("PRAGMA table_info(users)")
     columns = [row[1] for row in cursor.fetchall()]
     needed = [
-        (\"captain_id\", \"INTEGER\"), (\"vc_id\", \"INTEGER\"), (\"impact_id\", \"INTEGER\"),
-        (\"roles_locked\", \"INTEGER DEFAULT 0\"), (\"free_transfers\", \"INTEGER DEFAULT 2\"),
-        (\"triple_captain_used\", \"INTEGER DEFAULT 0\"), (\"unlimited_transfers_used\", \"INTEGER DEFAULT 0\"),
-        (\"triple_captain_active\", \"INTEGER DEFAULT 0\"), (\"unlimited_transfers_active\", \"INTEGER DEFAULT 0\"),
-        (\"transfer_penalty\", \"INTEGER DEFAULT 0\"),
+        ("captain_id", "INTEGER"), ("vc_id", "INTEGER"), ("impact_id", "INTEGER"),
+        ("roles_locked", "INTEGER DEFAULT 0"), ("free_transfers", "INTEGER DEFAULT 2"),
+        ("triple_captain_used", "INTEGER DEFAULT 0"), ("unlimited_transfers_used", "INTEGER DEFAULT 0"),
+        ("triple_captain_active", "INTEGER DEFAULT 0"), ("unlimited_transfers_active", "INTEGER DEFAULT 0"),
+        ("transfer_penalty", "INTEGER DEFAULT 0"),
     ]
     for col_name, col_type in needed:
         if col_name not in columns:
-            try: conn.execute(f\"ALTER TABLE users ADD COLUMN {col_name} {col_type}\")
+            try: conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
             except: pass
             
     # Settings migrations
     s_cols = [row[1] for row in conn.execute('PRAGMA table_info(settings)').fetchall()]
-    if 'cricapi_key' not in s_cols: conn.execute(\"ALTER TABLE settings ADD COLUMN cricapi_key TEXT DEFAULT ''\")
+    if 'cricapi_key' not in s_cols: conn.execute("ALTER TABLE settings ADD COLUMN cricapi_key TEXT DEFAULT ''")
     if 'auto_fetch' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN auto_fetch INTEGER DEFAULT 0')
     if 'fetch_interval' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
     if 'week_start_match_id' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN week_start_match_id INTEGER DEFAULT 0')
@@ -198,7 +198,7 @@ def init_db():
     
     # matches migration
     m_cols = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
-    if 'cricapi_match_id' not in m_cols: conn.execute(\"ALTER TABLE matches ADD COLUMN cricapi_match_id TEXT DEFAULT ''\")
+    if 'cricapi_match_id' not in m_cols: conn.execute("ALTER TABLE matches ADD COLUMN cricapi_match_id TEXT DEFAULT ''")
 
     conn.commit()
     admin = conn.execute('SELECT * FROM users WHERE username = ?', ('admin',)).fetchone()
@@ -241,7 +241,7 @@ def recalculate_all_users(conn):
     for up in all_user_players:
         if up['username'] not in u_players: u_players[up['username']] = []
         u_players[up['username']].append((up['player_id'], up['joined_at']))
-    done_matches = conn.execute('SELECT id FROM matches WHERE status = \"done\"').fetchall()
+    done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
     all_match_ids = [m['id'] for m in done_matches]
     this_week_ids = set(m['id'] for m in done_matches if m['id'] > week_start_mid)
     for u in users:
