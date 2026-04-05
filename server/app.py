@@ -507,66 +507,9 @@ def update_stats():
     return jsonify(ok=True)
 
 def _recalculate_user_points(conn):
-    # Get week boundary: only matches with id > week_start_match_id count for weekly points
-    settings = conn.execute('SELECT week_start_match_id FROM settings WHERE id = 1').fetchone()
-    week_start_mid = settings['week_start_match_id'] if settings and settings['week_start_match_id'] else 0
-
-    users = conn.execute('SELECT username, captain_id, vc_id, impact_id, triple_captain_active, transfer_penalty FROM users').fetchall()
-    # Get list of all match stats
-    all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
-    stats_dict = {} # (pid, mid) -> points
-    for s in all_stats:
-        stats_dict[(s['player_id'], s['match_id'])] = s['points']
-
-    # Load squad WITH join dates — critical for correct points after transfers
-    # joined_at = 0 means original squad (counts all matches)
-    # joined_at = N means transferred in after match N (only counts matches > N)
-    all_user_players = conn.execute(
-        'SELECT username, player_id, COALESCE(joined_at_match_id, 0) as joined_at FROM user_teams'
-    ).fetchall()
-    u_players = {}  # username -> [(pid, joined_at_match_id)]
-    for up in all_user_players:
-        if up['username'] not in u_players: u_players[up['username']] = []
-        u_players[up['username']].append((up['player_id'], up['joined_at']))
-
-    # Get all done matches, split into all-time and this-week
-    done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
-    all_match_ids = [m['id'] for m in done_matches]
-    this_week_ids = set(m['id'] for m in done_matches if m['id'] > week_start_mid)
-
-    for u in users:
-        username = u['username']
-        total = 0
-        weekly = 0
-        squad = u_players.get(username, [])
-        cap_id = u['captain_id']
-        vc_id = u['vc_id']
-        tc_active = bool(u['triple_captain_active'])
-        penalty = u['transfer_penalty'] or 0
-
-        for mid in all_match_ids:
-            for (pid, joined_at) in squad:
-                # KEY FIX: skip stats for matches played BEFORE or ON the player's join date
-                # This prevents transferred-in players from earning historical points
-                if mid <= joined_at:
-                    continue
-                pts = stats_dict.get((pid, mid), 0)
-                mul = 1.0
-                if pid == cap_id:
-                    mul = 3.0 if tc_active else 2.0
-                elif pid == vc_id:
-                    mul = 1.5
-                total += pts * mul
-                # Only count this week's matches for weekly_points
-                if mid in this_week_ids:
-                    weekly += pts * mul
-
-        # Subtract transfer penalty from total only
-        total -= penalty
-        conn.execute('UPDATE users SET total_points = ?, weekly_points = ? WHERE username = ?',
-                     (int(total), int(weekly), username))
-    conn.commit()
-
+    from db import recalculate_all_users
+    recalculate_all_users(conn)
+    return
 @app.route('/api/admin/recalculate', methods=['POST'])
 def recalculate():
     conn = get_conn()
