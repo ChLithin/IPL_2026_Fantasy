@@ -212,59 +212,27 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
       )}
 
       <>
-        {/* Transfer Window Banner */}
+        {/* Transfer Window Status */}
         {transferWindowInfo && (
-          <div className="card mb-4" style={{
-            borderColor: transferWindowInfo.is_open ? 'rgba(52,211,153,0.6)' : 'rgba(255,255,255,0.1)',
-            background: transferWindowInfo.is_open
-              ? 'linear-gradient(135deg, rgba(52,211,153,0.15), rgba(20,184,166,0.08))'
-              : 'linear-gradient(135deg, rgba(255,255,255,0.03), transparent)',
-            position: 'relative',
-            overflow: 'hidden',
+          <div className="flex items-center justify-between mb-3" style={{
+            padding: '8px 14px', borderRadius: 10,
+            background: transferWindowInfo.is_open ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${transferWindowInfo.is_open ? 'rgba(52,211,153,0.25)' : 'rgba(255,255,255,0.06)'}`,
           }}>
-            {transferWindowInfo.is_open && (
+            <div className="flex items-center gap-2">
               <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-                background: 'linear-gradient(90deg, #34d399, #14b8a6, #34d399)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 2s infinite linear',
+                width: 8, height: 8, borderRadius: '50%',
+                background: transferWindowInfo.is_open ? '#34d399' : '#64748b',
+                boxShadow: transferWindowInfo.is_open ? '0 0 6px #34d399' : 'none',
               }} />
-            )}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div style={{
-                  fontSize: 28,
-                  animation: transferWindowInfo.is_open ? 'pulse 2s infinite' : 'none',
-                }}>
-                  {transferWindowInfo.is_open ? '🟢' : '🔴'}
-                </div>
-                <div>
-                  <div style={{
-                    fontWeight: 900, fontSize: 14,
-                    color: transferWindowInfo.is_open ? '#34d399' : '#94a3b8',
-                  }}>
-                    {transferWindowInfo.is_open ? 'TRANSFER WINDOW OPEN' : 'TRANSFER WINDOW CLOSED'}
-                  </div>
-                  <div className="text-xs text-muted" style={{ marginTop: 2 }}>
-                    {transferWindowInfo.message}
-                  </div>
-                  <div className="text-xs" style={{ marginTop: 2, color: '#64748b' }}>
-                    Every Friday · 12:00 AM – 5:00 PM IST
-                  </div>
-                </div>
-              </div>
-              {transferWindowInfo.is_open && (
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{
-                    fontSize: 20, fontWeight: 900,
-                    background: 'linear-gradient(135deg, #34d399, #14b8a6)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  }}>
-                    {Math.floor((transferWindowInfo.closes_in_seconds || 0) / 3600)}h {Math.floor(((transferWindowInfo.closes_in_seconds || 0) % 3600) / 60)}m
-                  </div>
-                  <div className="text-xs text-muted">remaining</div>
-                </div>
-              )}
+              <span style={{ fontSize: 11, fontWeight: 700, color: transferWindowInfo.is_open ? '#34d399' : '#94a3b8' }}>
+                {transferWindowInfo.is_open ? 'Transfers Open' : 'Transfers Closed'}
+              </span>
+              <span className="text-muted" style={{ fontSize: 10 }}>
+                {transferWindowInfo.is_open
+                  ? `· closes in ${Math.floor((transferWindowInfo.closes_in_seconds || 0) / 3600)}h ${Math.floor(((transferWindowInfo.closes_in_seconds || 0) % 3600) / 60)}m`
+                  : `· opens Friday 12 AM`}
+              </span>
             </div>
           </div>
         )}
