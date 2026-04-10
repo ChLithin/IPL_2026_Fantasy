@@ -1,7 +1,5 @@
 import datetime
 import json
-import threading
-import time as _time
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
@@ -59,93 +57,35 @@ def _get_transfer_window_info():
             'opens_at': next_friday.isoformat(),
         }
 
-# ── Scheduler ─────────────────────────────────────────────────────────────────
-_scheduler_thread = None
-_scheduler_stop = threading.Event()
-_last_reset_date = None  # Track which Friday we last reset on
-
-def _do_weekly_reset(flask_app):
-    """Perform the weekly reset: same logic as the admin endpoint."""
-    with flask_app.app_context():
-        conn = get_conn()
-        max_match = conn.execute('SELECT COALESCE(MAX(id), 0) as mid FROM matches').fetchone()
-        week_start = max_match['mid'] if max_match else 0
-        conn.execute('UPDATE settings SET week_start_match_id = ? WHERE id = 1', (week_start,))
-        users = conn.execute('SELECT username, free_transfers FROM users').fetchall()
-        for u in users:
-            current_ft = u['free_transfers'] if u['free_transfers'] is not None else 0
-            new_ft = min(current_ft + 2, 5)
-            conn.execute(
-                'UPDATE users SET weekly_points = 0, roles_locked = 0, free_transfers = ?, '
-                'triple_captain_active = 0, unlimited_transfers_active = 0, transfer_penalty = 0 '
-                'WHERE username = ?',
-                (new_ft, u['username'])
-            )
-        conn.commit()
-        conn.close()
-        print(f"[Scheduler] Weekly reset completed at {_now_ist().isoformat()}")
-
-def _set_transfer_window(flask_app, open_it):
-    """Open or close the transfer window."""
-    with flask_app.app_context():
-        conn = get_conn()
-        conn.execute('UPDATE settings SET allow_team_edit = ? WHERE id = 1', (1 if open_it else 0,))
-        conn.commit()
-        conn.close()
-        state = "OPENED" if open_it else "CLOSED"
-        print(f"[Scheduler] Transfer window {state} at {_now_ist().isoformat()}")
-
-def _scheduler_loop(flask_app):
-    """Background thread: checks every 30s to manage weekly reset & transfer window."""
-    global _last_reset_date
-    print("[Scheduler] Started - weekly reset on Fridays, transfer window Fri 12AM-5PM IST")
-
-    while not _scheduler_stop.is_set():
-        try:
-            now = _now_ist()
-            today_str = now.strftime('%Y-%m-%d')
-            is_friday = (now.weekday() == 4)
-
-            if is_friday:
-                # 1) Weekly reset at midnight Friday (once per Friday)
-                if _last_reset_date != today_str and now.hour < 1:
-                    _do_weekly_reset(flask_app)
-                    _last_reset_date = today_str
-
-                # 2) Transfer window: open before 5 PM, close after
-                with flask_app.app_context():
-                    conn = get_conn()
-                    row = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
-                    current = row['allow_team_edit'] if row else 0
-                    conn.close()
-
-                should_be_open = now.hour < 17
-                if should_be_open and not current:
-                    _set_transfer_window(flask_app, True)
-                elif not should_be_open and current:
-                    _set_transfer_window(flask_app, False)
-            else:
-                # Not Friday - make sure window is closed
-                with flask_app.app_context():
-                    conn = get_conn()
-                    row = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
-                    current = row['allow_team_edit'] if row else 0
-                    conn.close()
-                if current:
-                    _set_transfer_window(flask_app, False)
-
-        except Exception as e:
-            print(f"[Scheduler] Error: {e}")
-
-        _scheduler_stop.wait(30)  # Check every 30 seconds
-
-def start_scheduler(flask_app):
-    global _scheduler_thread
-    if _scheduler_thread and _scheduler_thread.is_alive():
+# ── Lazy Weekly Reset (no scheduler needed) ──────────────────────────────────
+def _maybe_do_weekly_reset(conn):
+    """Check if we need to do the Friday weekly reset. Runs lazily on API calls."""
+    now = _now_ist()
+    if now.weekday() != 4:  # Only on Fridays
         return
-    _scheduler_stop.clear()
-    _scheduler_thread = threading.Thread(target=_scheduler_loop, args=(flask_app,), daemon=True)
-    _scheduler_thread.start()
+    today_str = now.strftime('%Y-%m-%d')
+    row = conn.execute('SELECT last_weekly_reset FROM settings WHERE id = 1').fetchone()
+    last_reset = row['last_weekly_reset'] if row and row['last_weekly_reset'] else ''
+    if last_reset == today_str:
+        return  # Already reset today
+
+    # Do the weekly reset
+    max_match = conn.execute('SELECT COALESCE(MAX(id), 0) as mid FROM matches').fetchone()
+    week_start = max_match['mid'] if max_match else 0
+    conn.execute('UPDATE settings SET week_start_match_id = ?, last_weekly_reset = ? WHERE id = 1',
+                 (week_start, today_str))
+    users = conn.execute('SELECT username, free_transfers FROM users').fetchall()
+    for u in users:
+        current_ft = u['free_transfers'] if u['free_transfers'] is not None else 0
+        new_ft = min(current_ft + 2, 5)
+        conn.execute(
+            'UPDATE users SET weekly_points = 0, roles_locked = 0, free_transfers = ?, '
+            'triple_captain_active = 0, unlimited_transfers_active = 0, transfer_penalty = 0 '
+            'WHERE username = ?',
+            (new_ft, u['username'])
+        )
+    conn.commit()
+    print(f"[AutoReset] Weekly reset completed at {now.isoformat()}")
 
 app = Flask(__name__)
 
@@ -342,11 +282,10 @@ def save_team():
     transfer_join_point = 0
 
     if is_edit:
-        settings = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
-        allow_edit = settings['allow_team_edit'] if settings else 0
-        if not allow_edit:
+        # Transfer window is clock-based: Friday 12AM-5PM IST
+        if not _is_transfer_window_open_now():
             conn.close()
-            return jsonify(error="Team editing is currently locked by admin"), 400
+            return jsonify(error="Transfer window is closed. Opens every Friday 12:00 AM - 5:00 PM IST"), 400
 
         # Fetch current join dates for all existing players before we delete them
         joined_rows = conn.execute(
@@ -555,24 +494,26 @@ def handle_settings():
         conn.commit()
         conn.close()
         return jsonify(success=True)
-    row = conn.execute('SELECT allow_team_edit, auto_fetch, fetch_interval FROM settings WHERE id=1').fetchone()
+    # Trigger lazy weekly reset if needed
+    _maybe_do_weekly_reset(conn)
+    row = conn.execute('SELECT auto_fetch, fetch_interval FROM settings WHERE id=1').fetchone()
     conn.close()
+    info = _get_transfer_window_info()
+    info['allow_team_edit'] = 1 if info['is_open'] else 0
     if row:
-        result = dict(row)
-        # Merge live transfer window info
-        result.update(_get_transfer_window_info())
-        return jsonify(result)
-    return jsonify(allow_team_edit=0, auto_fetch=0, fetch_interval=600)
+        info['auto_fetch'] = row['auto_fetch']
+        info['fetch_interval'] = row['fetch_interval']
+    return jsonify(info)
 
 # ── Transfer Window Status (public) ──────────────────────────────────────────
 @app.route('/api/transfer-window-status')
 def transfer_window_status():
     """Public endpoint: returns whether transfer window is open + countdown."""
     conn = get_conn()
-    row = conn.execute('SELECT allow_team_edit FROM settings WHERE id = 1').fetchone()
+    _maybe_do_weekly_reset(conn)
     conn.close()
     info = _get_transfer_window_info()
-    info['allow_team_edit'] = row['allow_team_edit'] if row else 0
+    info['allow_team_edit'] = 1 if info['is_open'] else 0
     return jsonify(info)
 
 # ── Public: Matches ───────────────────────────────────────────────────────────
@@ -1147,8 +1088,6 @@ def serve(path):
 
 if __name__ == '__main__':
     init_db()
-    # Start the weekly reset / transfer window scheduler
-    start_scheduler(app)
     # Start CricAPI auto-fetch if configured
     conn = get_conn()
     row = conn.execute('SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1').fetchone()

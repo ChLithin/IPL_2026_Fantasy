@@ -121,7 +121,9 @@ def init_db():
             cricapi_key TEXT DEFAULT '',
             auto_fetch INTEGER DEFAULT 0,
             fetch_interval INTEGER DEFAULT 600,
-            week_start_match_id INTEGER DEFAULT 0
+            week_start_match_id INTEGER DEFAULT 0,
+            last_weekly_reset TEXT DEFAULT '',
+            last_weekly_reset TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS user_teams (
             username TEXT NOT NULL,
@@ -191,6 +193,8 @@ def init_db():
     if 'auto_fetch' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN auto_fetch INTEGER DEFAULT 0')
     if 'fetch_interval' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
     if 'week_start_match_id' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN week_start_match_id INTEGER DEFAULT 0')
+    if 'last_weekly_reset' not in s_cols: conn.execute("ALTER TABLE settings ADD COLUMN last_weekly_reset TEXT DEFAULT ''")
+    if 'last_weekly_reset' not in s_cols: conn.execute("ALTER TABLE settings ADD COLUMN last_weekly_reset TEXT DEFAULT ''")
 
     # user_teams migration
     ut_cols = [row[1] for row in conn.execute('PRAGMA table_info(user_teams)').fetchall()]
