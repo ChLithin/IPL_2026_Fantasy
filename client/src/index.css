@@ -99,3 +99,9 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-img { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); }
 .player-img-lg { width: 64px; height: 64px; border-radius: 16px; }
+
+/* Transfer Window Shimmer Animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

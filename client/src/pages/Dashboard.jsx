@@ -72,9 +72,30 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
   const [imp, setImp] = useState(null);
   const [roleMsg, setRoleMsg] = useState('');
   const [chipMsg, setChipMsg] = useState('');
+  const [transferWindowInfo, setTransferWindowInfo] = useState(null);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
+  }, []);
+
+  // Poll transfer window status every 30 seconds
+  useEffect(() => {
+    const fetchStatus = () => {
+      api.getTransferWindowStatus().then(setTransferWindowInfo).catch(console.error);
+    };
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll transfer window status every 30 seconds
+  useEffect(() => {
+    const fetchStatus = () => {
+      api.getTransferWindowStatus().then(setTransferWindowInfo).catch(console.error);
+    };
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -191,7 +212,63 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
       )}
 
       <>
-        
+        {/* Transfer Window Banner */}
+        {transferWindowInfo && (
+          <div className="card mb-4" style={{
+            borderColor: transferWindowInfo.is_open ? 'rgba(52,211,153,0.6)' : 'rgba(255,255,255,0.1)',
+            background: transferWindowInfo.is_open
+              ? 'linear-gradient(135deg, rgba(52,211,153,0.15), rgba(20,184,166,0.08))'
+              : 'linear-gradient(135deg, rgba(255,255,255,0.03), transparent)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            {transferWindowInfo.is_open && (
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+                background: 'linear-gradient(90deg, #34d399, #14b8a6, #34d399)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 2s infinite linear',
+              }} />
+            )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div style={{
+                  fontSize: 28,
+                  animation: transferWindowInfo.is_open ? 'pulse 2s infinite' : 'none',
+                }}>
+                  {transferWindowInfo.is_open ? '🟢' : '🔴'}
+                </div>
+                <div>
+                  <div style={{
+                    fontWeight: 900, fontSize: 14,
+                    color: transferWindowInfo.is_open ? '#34d399' : '#94a3b8',
+                  }}>
+                    {transferWindowInfo.is_open ? 'TRANSFER WINDOW OPEN' : 'TRANSFER WINDOW CLOSED'}
+                  </div>
+                  <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                    {transferWindowInfo.message}
+                  </div>
+                  <div className="text-xs" style={{ marginTop: 2, color: '#64748b' }}>
+                    Every Friday · 12:00 AM – 5:00 PM IST
+                  </div>
+                </div>
+              </div>
+              {transferWindowInfo.is_open && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{
+                    fontSize: 20, fontWeight: 900,
+                    background: 'linear-gradient(135deg, #34d399, #14b8a6)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  }}>
+                    {Math.floor((transferWindowInfo.closes_in_seconds || 0) / 3600)}h {Math.floor(((transferWindowInfo.closes_in_seconds || 0) % 3600) / 60)}m
+                  </div>
+                  <div className="text-xs text-muted">remaining</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-3 mb-4 overflow-x-auto overflow-y-hidden" style={{paddingBottom: 4, scrollbarWidth: 'none'}}>
           {prevMatch && (
             <div className="card text-center" style={{flex:'0 0 160px', padding:'12px 8px', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)',  transition:'all 0.2s', zIndex:10}} onClick={() => openScorecard(prevMatch)} onMouseOver={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'} onMouseOut={e => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}>
@@ -353,7 +430,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
                 </select>
               </div>
             </div>
-            {userData.roles_locked && <p className="text-center text-muted mt-2" style={{fontSize:10}}>Roles are fixed until the next Weekly Reset by Admin.</p>}
+            {userData.roles_locked && <p className="text-center text-muted mt-2" style={{fontSize:10}}>Roles are fixed until next Friday (auto-reset at 12 AM IST).</p>}
           </div>
         )}
 
@@ -363,7 +440,7 @@ export default function Dashboard({ user, players, teamMeta, onEditTeam, onSelec
             {settings.allow_team_edit ? (
               <button className="btn btn-sm btn-primary" onClick={onEditTeam} style={{fontSize:12}}>✎ Edit Team</button>
             ) : (
-              <div style={{background:'rgba(255,255,255,0.1)',color:'#94a3b8',fontSize:10,padding:'4px 10px',borderRadius:8}}>🔒 Transfers Locked</div>
+              <div style={{background:'rgba(255,255,255,0.1)',color:'#94a3b8',fontSize:10,padding:'4px 10px',borderRadius:8}}>🔒 Transfers Locked · Opens Friday 12 AM</div>
             )}
           </div>
         )}

@@ -678,17 +678,35 @@ export default function AdminPanel({ user, players, teamMeta, onRefresh }) {
       
       {tab === "controls" && (
         <div style={{maxWidth:500}}>
-          <div className="card mb-3">
-            <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>📅 Weekly Reset</div>
-            <p className="text-muted text-sm mb-3">Reset ALL users weekly points to 0. Total points are preserved.</p>
-            <button className="btn btn-danger" onClick={resetWeekly}>🔄 Reset Weekly Points</button>
-          </div>
-          <div className="card mb-3">
-            <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>🔄 Transfer Window (Team Edits)</div>
-            <p className="text-muted text-sm mb-3">Allow players to edit their squads. Currently: <b>{settings.allow_team_edit ? "OPEN" : "LOCKED"}</b></p>
-            <button className={`btn ${settings.allow_team_edit ? "btn-danger" : "btn-primary"}`} onClick={toggleEdit}>
-              {settings.allow_team_edit ? "🔒 Close Transfer Window" : "🔓 Open Transfer Window"}
-            </button>
+          <div className="card mb-3" style={{borderColor:'rgba(52,211,153,0.3)', background:'linear-gradient(135deg, rgba(52,211,153,0.05), transparent)'}}>
+            <div className="flex items-center gap-2 mb-2">
+              <span style={{fontSize:20}}>🤖</span>
+              <div style={{fontWeight:700,fontSize:14}}>Automated Schedule</div>
+            </div>
+            <div style={{background:'rgba(0,0,0,0.3)', borderRadius:8, padding:12, marginBottom:12}}>
+              <div className="flex items-center gap-2 mb-2">
+                <span style={{fontSize:14}}>📅</span>
+                <div>
+                  <div className="text-xs font-bold" style={{color:'#34d399'}}>Weekly Reset</div>
+                  <div className="text-xs text-muted">Every Friday at 12:00 AM IST (automatic)</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span style={{fontSize:14}}>🔄</span>
+                <div>
+                  <div className="text-xs font-bold" style={{color:'#fde047'}}>Transfer Window</div>
+                  <div className="text-xs text-muted">Every Friday 12:00 AM – 5:00 PM IST (automatic)</div>
+                </div>
+              </div>
+            </div>
+            <p className="text-muted text-sm mb-3">Current transfer window: <b style={{color: settings.allow_team_edit ? '#34d399' : '#ef4444'}}>{settings.allow_team_edit ? "OPEN" : "LOCKED"}</b></p>
+            <div className="flex gap-2">
+              <button className={`btn btn-sm ${settings.allow_team_edit ? "btn-danger" : "btn-primary"}`} onClick={toggleEdit}>
+                {settings.allow_team_edit ? "🔒 Force Close" : "🔓 Force Open"} (Manual Override)
+              </button>
+              <button className="btn btn-sm btn-danger" onClick={resetWeekly}>🔄 Force Reset Weekly</button>
+            </div>
+            <p className="text-muted mt-2" style={{fontSize:10}}>Manual overrides will be corrected by the scheduler at the next check (within 30 seconds).</p>
           </div>
           <div className="card mb-3">
             <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>🔢 Recalculate Points</div>

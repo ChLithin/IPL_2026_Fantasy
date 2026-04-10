@@ -85,6 +85,8 @@ api.getUserTeamPublic = (username) => request(`/api/user/${username}/team-public
 api.getGlobalLeaderboard = () => request('/api/global-leaderboard');
 
 // CricAPI integration
+api.getTransferWindowStatus = () => request('/api/transfer-window-status');
+api.getTransferWindowStatus = () => request('/api/transfer-window-status');
 api.getCricApiConfig = () => request('/api/admin/cricapi/config');
 api.updateCricApiConfig = (cricapi_key, auto_fetch, fetch_interval) =>
   request('/api/admin/cricapi/config', { method: 'POST', body: JSON.stringify({ cricapi_key, auto_fetch, fetch_interval }) });
