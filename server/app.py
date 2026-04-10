@@ -64,8 +64,17 @@ def _maybe_do_weekly_reset(conn):
     if now.weekday() != 4:  # Only on Fridays
         return
     today_str = now.strftime('%Y-%m-%d')
-    row = conn.execute('SELECT last_weekly_reset FROM settings WHERE id = 1').fetchone()
-    last_reset = row['last_weekly_reset'] if row and row['last_weekly_reset'] else ''
+    try:
+        row = conn.execute('SELECT last_weekly_reset FROM settings WHERE id = 1').fetchone()
+        last_reset = row['last_weekly_reset'] if row and row['last_weekly_reset'] else ''
+    except Exception:
+        # Column might not exist yet — add it
+        try:
+            conn.execute("ALTER TABLE settings ADD COLUMN last_weekly_reset TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            pass
+        last_reset = ''
     if last_reset == today_str:
         return  # Already reset today
 
