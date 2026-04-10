@@ -89,7 +89,7 @@ def _maybe_do_weekly_reset(conn):
         new_ft = min(current_ft + 2, 5)
         conn.execute(
             'UPDATE users SET weekly_points = 0, roles_locked = 0, free_transfers = ?, '
-            'triple_captain_active = 0, unlimited_transfers_active = 0, transfer_penalty = 0 '
+            'triple_captain_active = 0, unlimited_transfers_active = 0 '
             'WHERE username = ?',
             (new_ft, u['username'])
         )
