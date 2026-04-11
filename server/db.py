@@ -122,13 +122,14 @@ def init_db():
             auto_fetch INTEGER DEFAULT 0,
             fetch_interval INTEGER DEFAULT 600,
             week_start_match_id INTEGER DEFAULT 0,
-            last_weekly_reset TEXT DEFAULT '',
             last_weekly_reset TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS user_teams (
             username TEXT NOT NULL,
             player_id INTEGER NOT NULL,
             joined_at_match_id INTEGER DEFAULT 0,
+            removed_at_match_id INTEGER DEFAULT NULL,
+            is_active INTEGER DEFAULT 1,
             PRIMARY KEY (username, player_id),
             FOREIGN KEY (username) REFERENCES users(username),
             FOREIGN KEY (player_id) REFERENCES players(id)
@@ -194,11 +195,22 @@ def init_db():
     if 'fetch_interval' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN fetch_interval INTEGER DEFAULT 600')
     if 'week_start_match_id' not in s_cols: conn.execute('ALTER TABLE settings ADD COLUMN week_start_match_id INTEGER DEFAULT 0')
     if 'last_weekly_reset' not in s_cols: conn.execute("ALTER TABLE settings ADD COLUMN last_weekly_reset TEXT DEFAULT ''")
-    if 'last_weekly_reset' not in s_cols: conn.execute("ALTER TABLE settings ADD COLUMN last_weekly_reset TEXT DEFAULT ''")
 
     # user_teams migration
     ut_cols = [row[1] for row in conn.execute('PRAGMA table_info(user_teams)').fetchall()]
     if 'joined_at_match_id' not in ut_cols: conn.execute('ALTER TABLE user_teams ADD COLUMN joined_at_match_id INTEGER DEFAULT 0')
+    if 'removed_at_match_id' not in ut_cols:
+        try: conn.execute('ALTER TABLE user_teams ADD COLUMN removed_at_match_id INTEGER DEFAULT NULL')
+        except: pass
+    if 'is_active' not in ut_cols:
+        try: conn.execute('ALTER TABLE user_teams ADD COLUMN is_active INTEGER DEFAULT 1')
+        except: pass
+    if 'removed_at_match_id' not in ut_cols:
+        try: conn.execute('ALTER TABLE user_teams ADD COLUMN removed_at_match_id INTEGER DEFAULT NULL')
+        except: pass
+    if 'is_active' not in ut_cols:
+        try: conn.execute('ALTER TABLE user_teams ADD COLUMN is_active INTEGER DEFAULT 1')
+        except: pass
     
     # matches migration
     m_cols = [row[1] for row in conn.execute('PRAGMA table_info(matches)').fetchall()]
@@ -240,11 +252,15 @@ def recalculate_all_users(conn):
     users = conn.execute('SELECT username, captain_id, vc_id, impact_id, triple_captain_active, transfer_penalty FROM users').fetchall()
     all_stats = conn.execute('SELECT * FROM player_stats').fetchall()
     stats_dict = {(s['player_id'], s['match_id']): s['points'] for s in all_stats}
-    all_user_players = conn.execute('SELECT username, player_id, COALESCE(joined_at_match_id, 0) as joined_at FROM user_teams').fetchall()
+    all_user_players = conn.execute(
+        'SELECT username, player_id, COALESCE(joined_at_match_id, 0) as joined_at, '
+        'removed_at_match_id FROM user_teams'
+    ).fetchall()
     u_players = {}
     for up in all_user_players:
         if up['username'] not in u_players: u_players[up['username']] = []
-        u_players[up['username']].append((up['player_id'], up['joined_at']))
+        removed_at = up['removed_at_match_id']  # None means still active
+        u_players[up['username']].append((up['player_id'], up['joined_at'], removed_at))
     done_matches = conn.execute('SELECT id FROM matches WHERE status = "done"').fetchall()
     all_match_ids = [m['id'] for m in done_matches]
     this_week_ids = set(m['id'] for m in done_matches if m['id'] > week_start_mid)
@@ -252,8 +268,10 @@ def recalculate_all_users(conn):
         total, weekly = 0, 0
         squad = u_players.get(u['username'], [])
         for mid in all_match_ids:
-            for (pid, joined_at) in squad:
+            for (pid, joined_at, removed_at) in squad:
                 if mid <= joined_at: continue
+                # If player was removed, only count matches up to removal point
+                if removed_at is not None and mid > removed_at: continue
                 pts = stats_dict.get((pid, mid), 0)
                 mul = 1.5 if pid == u['vc_id'] else 1.0
                 if pid == u['captain_id']: mul = 3.0 if u['triple_captain_active'] else 2.0

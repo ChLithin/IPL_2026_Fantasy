@@ -161,7 +161,7 @@ def login():
     if admin_pass == ADMIN_PASSWORD and not user['is_admin']:
         conn.execute('UPDATE users SET is_admin = 1 WHERE username = ?', (username,))
         conn.commit()
-    team_rows = conn.execute('SELECT player_id FROM user_teams WHERE username = ?', (username,)).fetchall()
+    team_rows = conn.execute('SELECT player_id FROM user_teams WHERE username = ? AND is_active = 1', (username,)).fetchall()
     team_ids = [r['player_id'] for r in team_rows]
     result = {
         'username': user['username'],
@@ -282,7 +282,7 @@ def save_team():
         return jsonify(error="; ".join(errors)), 400
 
     # Check if user already has a team (edit mode)
-    existing_team = conn.execute('SELECT player_id FROM user_teams WHERE username = ?', (username,)).fetchall()
+    existing_team = conn.execute('SELECT player_id FROM user_teams WHERE username = ? AND is_active = 1', (username,)).fetchall()
     is_edit = len(existing_team) > 0
 
     # Save existing player join dates BEFORE any deletions
@@ -298,7 +298,7 @@ def save_team():
 
         # Fetch current join dates for all existing players before we delete them
         joined_rows = conn.execute(
-            'SELECT player_id, COALESCE(joined_at_match_id, 0) as jat FROM user_teams WHERE username = ?',
+            'SELECT player_id, COALESCE(joined_at_match_id, 0) as jat FROM user_teams WHERE username = ? AND is_active = 1',
             (username,)
         ).fetchall()
         for r in joined_rows:
@@ -336,18 +336,32 @@ def save_team():
         ).fetchone()
         transfer_join_point = max_match_row['mid'] if max_match_row else 0
 
-    conn.execute('DELETE FROM user_teams WHERE username = ?', (username,))
-    for pid in player_ids:
-        if pid in new_player_ids:
-            # Transferred in: only earns points from matches AFTER this point
-            joined_at = transfer_join_point
-        else:
-            # Kept player or initial squad build: preserve existing join date (0 = all history)
+    if is_edit:
+        # Mark removed players as inactive (preserve their historical points)
+        old_ids = set(r['player_id'] for r in existing_team)
+        removed_ids = old_ids - set(player_ids)
+        for rid in removed_ids:
+            conn.execute(
+                'UPDATE user_teams SET is_active = 0, removed_at_match_id = ? WHERE username = ? AND player_id = ? AND is_active = 1',
+                (transfer_join_point, username, rid)
+            )
+        # Update or insert remaining players
+        for pid in player_ids:
+            if pid in new_player_ids:
+                # New player transferred in - insert fresh row
+                conn.execute(
+                    'INSERT OR REPLACE INTO user_teams (username, player_id, joined_at_match_id, removed_at_match_id, is_active) VALUES (?, ?, ?, NULL, 1)',
+                    (username, pid, transfer_join_point)
+                )
+            # Kept players stay unchanged (already in user_teams)
+    else:
+        # Initial team build - insert all
+        for pid in player_ids:
             joined_at = old_joined_at.get(pid, 0)
-        conn.execute(
-            'INSERT INTO user_teams (username, player_id, joined_at_match_id) VALUES (?, ?, ?)',
-            (username, pid, joined_at)
-        )
+            conn.execute(
+                'INSERT OR REPLACE INTO user_teams (username, player_id, joined_at_match_id, removed_at_match_id, is_active) VALUES (?, ?, ?, NULL, 1)',
+                (username, pid, joined_at)
+            )
     conn.commit()
     conn.close()
     return jsonify(ok=True)
@@ -355,7 +369,7 @@ def save_team():
 @app.route('/api/team/<username>')
 def get_team(username):
     conn = get_conn()
-    rows = conn.execute('SELECT p.* FROM user_teams ut JOIN players p ON ut.player_id = p.id WHERE ut.username = ? ORDER BY p.price DESC', (username,)).fetchall()
+    rows = conn.execute('SELECT p.* FROM user_teams ut JOIN players p ON ut.player_id = p.id WHERE ut.username = ? AND ut.is_active = 1 ORDER BY p.price DESC', (username,)).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -384,7 +398,7 @@ def join_group():
     if not code or not username:
         return jsonify(error="Code and username required"), 400
     conn = get_conn()
-    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ?', (username,)).fetchone()
+    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ? AND is_active = 1', (username,)).fetchone()
     if not has_team:
         conn.close()
         return jsonify(error="You must build your squad before joining a group"), 400
@@ -464,7 +478,7 @@ def get_user(username):
     if not user:
         conn.close()
         return jsonify(error="User not found"), 404
-    team_rows = conn.execute('SELECT p.*, COALESCE(SUM(ps.points), 0) as earned_points FROM user_teams ut JOIN players p ON ut.player_id = p.id LEFT JOIN player_stats ps ON ps.player_id = p.id WHERE ut.username = ? GROUP BY p.id ORDER BY earned_points DESC', (username,)).fetchall()
+    team_rows = conn.execute('SELECT p.*, COALESCE(SUM(ps.points), 0) as earned_points FROM user_teams ut JOIN players p ON ut.player_id = p.id LEFT JOIN player_stats ps ON ps.player_id = p.id WHERE ut.username = ? AND ut.is_active = 1 GROUP BY p.id ORDER BY earned_points DESC', (username,)).fetchall()
     group_info = None
     if user['group_id']:
         group = conn.execute('SELECT * FROM groups_ WHERE code = ?', (user['group_id'],)).fetchone()
@@ -648,7 +662,7 @@ def admin_users():
     users = conn.execute('SELECT * FROM users ORDER BY total_points DESC').fetchall()
     result = []
     for u in users:
-        team_count = conn.execute('SELECT COUNT(*) as cnt FROM user_teams WHERE username = ?', (u['username'],)).fetchone()['cnt']
+        team_count = conn.execute('SELECT COUNT(*) as cnt FROM user_teams WHERE username = ? AND is_active = 1', (u['username'],)).fetchone()['cnt']
         result.append({**dict(u), 'team_count': team_count})
     conn.close()
     return jsonify(result)
@@ -784,7 +798,7 @@ def join_league():
     if not code or not username:
         return jsonify(error="Code and username required"), 400
     conn = get_conn()
-    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ?', (username,)).fetchone()
+    has_team = conn.execute('SELECT 1 FROM user_teams WHERE username = ? AND is_active = 1', (username,)).fetchone()
     if not has_team:
         conn.close()
         return jsonify(error="You must build your squad before joining a league"), 400
@@ -878,7 +892,7 @@ def user_team_public(username):
         FROM user_teams ut
         JOIN players p ON ut.player_id = p.id
         LEFT JOIN player_stats ps ON ps.player_id = p.id
-        WHERE ut.username = ?
+        WHERE ut.username = ? AND ut.is_active = 1
         GROUP BY p.id
         ORDER BY earned_points DESC
     ''', (username,)).fetchall()
@@ -902,7 +916,7 @@ def global_leaderboard():
         SELECT u.username, u.total_points, u.weekly_points
         FROM users u
         WHERE u.is_admin = 0
-        AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.username = u.username)
+        AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.username = u.username AND ut.is_active = 1)
         ORDER BY u.total_points DESC, u.weekly_points DESC
         LIMIT 100
     ''').fetchall()
