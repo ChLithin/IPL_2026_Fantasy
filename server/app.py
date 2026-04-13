@@ -96,6 +96,51 @@ def _maybe_do_weekly_reset(conn):
     conn.commit()
     print(f"[AutoReset] Weekly reset completed at {now.isoformat()}")
 
+# ── Lazy Auto-Fetch (no background thread needed) ────────────────────────────
+_last_auto_fetch_check = None  # Throttle: at most once per 5 minutes
+
+def _maybe_auto_fetch():
+    """Lazily trigger CricAPI auto-fetch if configured. Runs at most once per 5 min."""
+    global _last_auto_fetch_check
+    import time as _t
+    now = _t.time()
+    if _last_auto_fetch_check and (now - _last_auto_fetch_check) < 300:
+        return  # Checked less than 5 min ago, skip
+    _last_auto_fetch_check = now
+
+    try:
+        conn2 = get_conn()
+        row = conn2.execute('SELECT cricapi_key, auto_fetch FROM settings WHERE id = 1').fetchone()
+        conn2.close()
+        if not row or not row['cricapi_key'] or not row['auto_fetch']:
+            return
+        # Use the core auto-fetch logic (opens its own connection)
+        cricapi._auto_fetch_cycle(app, is_manual=False)
+    except Exception as e:
+        print(f"[LazyFetch] Error: {e}")
+
+# ── Lazy Auto-Fetch (no background thread needed) ────────────────────────────
+_last_auto_fetch_check = None  # Throttle: at most once per 5 minutes
+
+def _maybe_auto_fetch():
+    """Lazily trigger CricAPI auto-fetch if configured. Runs at most once per 5 min."""
+    global _last_auto_fetch_check
+    import time as _t
+    now = _t.time()
+    if _last_auto_fetch_check and (now - _last_auto_fetch_check) < 300:
+        return  # Checked less than 5 min ago, skip
+    _last_auto_fetch_check = now
+
+    try:
+        row = conn.execute('SELECT cricapi_key, auto_fetch FROM settings WHERE id = 1').fetchone()
+        if not row or not row['cricapi_key'] or not row['auto_fetch']:
+            return
+        conn.close()  # Close before the potentially slow API call
+        # Use the manual trigger endpoint logic
+        cricapi._auto_fetch_cycle(app, is_manual=False)
+    except Exception as e:
+        print(f"[LazyFetch] Error: {e}")
+
 app = Flask(__name__)
 
 import traceback
@@ -519,6 +564,8 @@ def handle_settings():
         return jsonify(success=True)
     # Trigger lazy weekly reset if needed
     _maybe_do_weekly_reset(conn)
+    # Trigger lazy auto-fetch if configured
+    _maybe_auto_fetch()
     row = conn.execute('SELECT auto_fetch, fetch_interval FROM settings WHERE id=1').fetchone()
     conn.close()
     info = _get_transfer_window_info()
@@ -534,6 +581,7 @@ def transfer_window_status():
     """Public endpoint: returns whether transfer window is open + countdown."""
     conn = get_conn()
     _maybe_do_weekly_reset(conn)
+    _maybe_auto_fetch()
     conn.close()
     info = _get_transfer_window_info()
     info['allow_team_edit'] = 1 if info['is_open'] else 0
