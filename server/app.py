@@ -1157,14 +1157,21 @@ def serve(path):
             return send_from_directory(dist_dir, 'index.html')
         return "Frontend not built. Run 'npm run build' in client folder.", 404
 
-if __name__ == '__main__':
+# ── Auto-fetch startup (runs on BOTH WSGI and local) ─────────────────────────
+# This runs at import time so PythonAnywhere's WSGI picks it up too.
+try:
     init_db()
-    # Start CricAPI auto-fetch if configured
-    conn = get_conn()
-    row = conn.execute('SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1').fetchone()
-    if row and row['cricapi_key'] and row['auto_fetch']:
-        cricapi.start_auto_fetch(app, row['fetch_interval'])
-        print(f"CricAPI auto-fetch started (interval: {row['fetch_interval']}s)")
-    conn.close()
+    _startup_conn = get_conn()
+    _startup_row = _startup_conn.execute(
+        'SELECT cricapi_key, auto_fetch, fetch_interval FROM settings WHERE id = 1'
+    ).fetchone()
+    if _startup_row and _startup_row['cricapi_key'] and _startup_row['auto_fetch']:
+        cricapi.start_auto_fetch(app, _startup_row['fetch_interval'])
+        print(f"[STARTUP] CricAPI auto-fetch thread started (interval: {_startup_row['fetch_interval']}s)")
+    _startup_conn.close()
+except Exception as _startup_err:
+    print(f"[STARTUP] Auto-fetch init skipped: {_startup_err}")
+
+if __name__ == '__main__':
     print("Server starting on http://localhost:5555")
     app.run(debug=True, port=5555)
